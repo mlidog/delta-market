@@ -20,10 +20,10 @@ import random
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import func, insert, select, update
 from sqlalchemy.orm import Session, sessionmaker
 from tenacity import RetryCallState, Retrying, retry_if_exception, stop_after_attempt
 
@@ -45,6 +45,16 @@ BACKOFF_BASE_SECONDS = 1.0
 BACKOFF_FACTOR = 4.0
 BACKOFF_MAX_SECONDS = 16.0
 
+#: 价格批次里"本地目录找不到对应物品"的比例超过这个阈值，就认为目录已过期。
+#: 典型场景：换了数据源，或者游戏更新加了一批新物品。
+CATALOG_MISMATCH_MIN = 5
+CATALOG_MISMATCH_RATIO = 0.10
+
+#: 未匹配物品占价格批次的比例超过这个值，整轮才判定为"部分成功"。
+#: 上游偶尔会有少量条目在基础信息库里缺失（实测 1383 条里有 23 条，约 1.7%），
+#: 那是上游数据不一致，不是我们采集出了问题，不该让每一轮都显示异常。
+UNMATCHED_TOLERANCE = 0.10
+
 
 @dataclass(slots=True)
 class CollectResult:
@@ -55,6 +65,8 @@ class CollectResult:
     items_total: int = 0
     items_created: int = 0
     items_updated: int = 0
+    #: 本轮是否真的去拉了物品基础信息（否则用的是本地缓存）
+    items_refreshed: bool = False
     prices_total: int = 0
     prices_written: int = 0
     prices_skipped: int = 0
@@ -160,23 +172,23 @@ class Collector:
         result: CollectResult,
         started_at: datetime,
     ) -> None:
-        items: list[ItemRecord] | None = None
         items_error: str | None = None
-        try:
-            items = self._with_retry(data_source.fetch_items)
-            result.items_total = len(items)
-        except DataSourceError as exc:
-            # 基础信息取不到不致命：价格仍然可以写进已存在的物品
-            items_error = str(exc)
-
-        # 先落物品并立即提交：item_info_all 单次消耗 20 次资源，
-        # 即使随后取价失败，也不该把已经花掉资源换来的数据丢掉。
-        if items:
-            result.items_created, result.items_updated = self._upsert_items(session, items)
-            session.commit()
+        if self._should_refresh_items(session):
+            items_error = self._refresh_items(session, data_source, result, started_at)
+        else:
+            result.items_total = int(
+                session.scalar(select(func.count()).select_from(Item)) or 0
+            )
 
         prices = self._with_retry(data_source.fetch_prices)
         result.prices_total = len(prices)
+
+        # 目录与价格对不上（换了数据源，或游戏新增物品）时补一次目录再写价格。
+        # 不补的话这一轮价格会全部落空——那 20 次资源的取价就白花了。
+        if not result.items_refreshed and self._catalog_is_outdated(session, prices):
+            items_error = (
+                self._refresh_items(session, data_source, result, started_at) or items_error
+            )
 
         known_ids = set(session.scalars(select(Item.item_id)).all())
         result.prices_written, result.prices_skipped, written_ids = self._write_prices(
@@ -190,7 +202,10 @@ class Collector:
         if result.prices_written == 0 and result.prices_skipped > 0:
             raise DataSourceError("全部物品都未能写入，本轮采集判定为失败")
 
-        if items_error or result.prices_skipped:
+        unmatch_ratio = (
+            result.prices_skipped / result.prices_total if result.prices_total else 0.0
+        )
+        if items_error or unmatch_ratio > UNMATCHED_TOLERANCE:
             result.status = CollectRunStatus.PARTIAL
             result.error = items_error
         else:
@@ -228,7 +243,62 @@ class Collector:
     # ------------------------------------------------------------------ #
     # 落库
     # ------------------------------------------------------------------ #
-    def _upsert_items(self, session: Session, items: list[ItemRecord]) -> tuple[int, int]:
+    def _should_refresh_items(self, session: Session) -> bool:
+        """是否需要去拉物品基础信息。
+
+        `item_info_all` 与 `item_price_all` 各消耗 20 次资源，而基础信息
+        （名称、分类、占格）几乎不变。默认只在本地为空或超过配置天数时刷新，
+        否则每轮都白花 20 次资源。
+        """
+        days = self._settings.collector_item_refresh_days
+        if days <= 0:
+            return True
+        newest = session.scalar(select(func.max(Item.updated_at)))
+        if newest is None:
+            return True
+        age = self._clock() - newest
+        # 时间戳落在未来（导入过演示数据、系统时间被调过）说明不可信，强制刷新一次
+        return age < timedelta(0) or age >= timedelta(days=days)
+
+    def _refresh_items(
+        self,
+        session: Session,
+        data_source: DataSource,
+        result: CollectResult,
+        started_at: datetime,
+    ) -> str | None:
+        """拉取并落库物品基础信息；返回错误信息（成功返回 None）。"""
+        try:
+            items = self._with_retry(data_source.fetch_items)
+        except DataSourceError as exc:
+            # 基础信息取不到不致命：价格仍然可以写进已存在的物品
+            return str(exc)
+
+        result.items_total = len(items)
+        result.items_refreshed = True
+        result.items_created, result.items_updated = self._upsert_items(
+            session, items, refreshed_at=started_at
+        )
+        # 立即提交：item_info_all 单次消耗 20 次资源，
+        # 即使随后取价失败，也不该把已经花掉资源换来的数据丢掉。
+        session.commit()
+        return None
+
+    def _catalog_is_outdated(self, session: Session, prices: list[PriceRecord]) -> bool:
+        """价格里有多少条在本地目录中找不到对应物品。"""
+        if not prices:
+            return False
+        local_ids = set(session.scalars(select(Item.item_id)).all())
+        unknown = sum(1 for record in prices if record.external_id not in local_ids)
+        return unknown >= CATALOG_MISMATCH_MIN and unknown >= len(prices) * CATALOG_MISMATCH_RATIO
+
+    def _upsert_items(
+        self,
+        session: Session,
+        items: list[ItemRecord],
+        *,
+        refreshed_at: datetime,
+    ) -> tuple[int, int]:
         existing = {
             row.item_id: row for row in session.scalars(select(Item)).all()
         }
@@ -249,6 +319,8 @@ class Collector:
                         object_id=record.object_id,
                         slot_w=record.slot_w,
                         slot_h=record.slot_h,
+                        created_at=refreshed_at,
+                        updated_at=refreshed_at,
                     )
                 )
                 created += 1
@@ -263,6 +335,9 @@ class Collector:
                 row.object_id = record.object_id
                 row.slot_w = record.slot_w
                 row.slot_h = record.slot_h
+                # 显式推进时间戳：它表示"目录最后核对时间"，而不是"这一行有没有变"。
+                # 否则数据长期不变时，行时间会一直停在过去，导致每轮都判定为过期而重复付费。
+                row.updated_at = refreshed_at
                 updated += 1
         session.flush()
         return created, updated

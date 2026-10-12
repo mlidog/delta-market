@@ -79,12 +79,17 @@ def make_collector(
     clock=BASE_TIME,
     sleep=None,
     jitter_ratio: float = 0.0,
+    item_refresh_days: int = 7,
 ) -> Collector:
     # 默认不真的睡：只有校验退避时间的用例才传入记录器
     sleeper = sleep if sleep is not None else (lambda _seconds: None)
     return Collector(
         session_factory=session_factory,
-        settings=Settings(_env_file=None, collector_retry_times=retry_times),
+        settings=Settings(
+            _env_file=None,
+            collector_retry_times=retry_times,
+            collector_item_refresh_days=item_refresh_days,
+        ),
         clock=lambda: clock,
         jitter_ratio=jitter_ratio,
         sleep=sleeper,
@@ -178,7 +183,9 @@ class TestSuccessfulRun:
         )
 
         assert second.items_created == 0
-        assert second.items_updated == 2
+        # 目录还在缓存期内，不会再花 20 次资源去拉一遍基础信息
+        assert second.items_updated == 0
+        assert second.items_refreshed is False
         assert second.history_written == 2
         assert session.scalar(select(func.count()).select_from(PriceHistory)) == 4
         assert session.scalar(select(func.count()).select_from(CurrentPrice)) == 2
@@ -286,9 +293,12 @@ class TestFailureHandling:
         source = StubSource(
             two_items, later_prices, item_errors=(DataSourceAuthError("基础信息挂了"),)
         )
-        result = make_collector(session_factory, clock=BASE_TIME + timedelta(hours=6)).run(
-            source
-        )
+        # 强制刷新基础信息（item_refresh_days=0），否则会因为目录还在缓存期内而根本不发起请求
+        result = make_collector(
+            session_factory,
+            clock=BASE_TIME + timedelta(hours=6),
+            item_refresh_days=0,
+        ).run(source)
 
         assert result.status is CollectRunStatus.PARTIAL
         assert result.error is not None and "基础信息" in result.error
@@ -443,6 +453,153 @@ class TestRetryPolicy:
         )
         result = make_collector(session_factory, retry_times=3).run(source)
         assert result.retries == 1
+
+
+class TestItemRefreshPolicy:
+    """物品基础信息按天缓存：item_info_all 每轮价值 20 次资源，不能白花。"""
+
+    def test_first_run_fetches_items(
+        self, session_factory, session, two_items, two_prices
+    ) -> None:
+        source = StubSource(two_items, two_prices)
+        result = make_collector(session_factory).run(source)
+        assert source.item_calls == 1
+        assert result.items_refreshed is True
+        assert result.items_created == 2
+
+    def test_fresh_catalog_is_not_refetched(
+        self, session_factory, session, two_items, two_prices
+    ) -> None:
+        make_collector(session_factory, clock=BASE_TIME).run(
+            StubSource(two_items, two_prices)
+        )
+        second_source = StubSource(
+            two_items, [make_price("1001", 1100), make_price("1002", 2200)]
+        )
+        result = make_collector(
+            session_factory, clock=BASE_TIME + timedelta(hours=6)
+        ).run(second_source)
+
+        assert second_source.item_calls == 0
+        assert result.items_refreshed is False
+        assert result.items_total == 2  # 用本地目录里的数量
+        assert result.prices_written == 2  # 价格照常刷新
+        assert result.status is CollectRunStatus.SUCCESS
+
+    def test_catalog_is_refetched_after_the_interval(
+        self, session_factory, session, two_items, two_prices
+    ) -> None:
+        make_collector(session_factory, clock=BASE_TIME).run(
+            StubSource(two_items, two_prices)
+        )
+        second_source = StubSource(two_items, two_prices)
+        result = make_collector(
+            session_factory, clock=BASE_TIME + timedelta(days=8), item_refresh_days=7
+        ).run(second_source)
+
+        assert second_source.item_calls == 1
+        assert result.items_refreshed is True
+        assert result.items_updated == 2
+
+    def test_interval_zero_forces_refresh_every_run(
+        self, session_factory, session, two_items, two_prices
+    ) -> None:
+        make_collector(session_factory, clock=BASE_TIME).run(
+            StubSource(two_items, two_prices)
+        )
+        second_source = StubSource(two_items, two_prices)
+        make_collector(
+            session_factory, clock=BASE_TIME + timedelta(hours=1), item_refresh_days=0
+        ).run(second_source)
+        assert second_source.item_calls == 1
+
+    def test_catalog_timestamp_advances_only_on_refresh(
+        self, session_factory, session, two_items, two_prices
+    ) -> None:
+        make_collector(session_factory, clock=BASE_TIME).run(
+            StubSource(two_items, two_prices)
+        )
+        make_collector(session_factory, clock=BASE_TIME + timedelta(hours=6)).run(
+            StubSource(two_items, two_prices)
+        )
+        stamps = set(session.scalars(select(Item.updated_at)).all())
+        assert stamps == {BASE_TIME}
+
+    def test_failed_refresh_is_retried_next_run(
+        self, session_factory, session, two_items, two_prices
+    ) -> None:
+        """取基础信息失败后，下一轮必须重试，不能把空目录当成"新鲜"。"""
+        failing = StubSource(
+            two_items, two_prices, item_errors=(DataSourceAuthError("基础信息挂了"),)
+        )
+        make_collector(session_factory, clock=BASE_TIME).run(failing)
+
+        retry_source = StubSource(two_items, two_prices)
+        result = make_collector(
+            session_factory, clock=BASE_TIME + timedelta(hours=6)
+        ).run(retry_source)
+        assert retry_source.item_calls == 1
+        assert result.items_refreshed is True
+        assert result.items_created == 2
+
+
+class TestCatalogSelfHealing:
+    """目录与价格对不上时的自愈：不能让这一轮的取价白白花掉。"""
+
+    def test_outdated_catalog_is_refreshed_before_writing_prices(
+        self, session_factory, session
+    ) -> None:
+        make_collector(session_factory).run(
+            StubSource([make_item("1")], [make_price("1", 100)])
+        )
+
+        # 第二轮：本地目录看着还新鲜，但价格里全是没见过的新物品
+        new_items = [make_item(str(i)) for i in range(2, 8)]
+        prices = [make_price(str(i), 100 * i) for i in range(2, 8)]
+        source = StubSource(new_items, prices)
+        result = make_collector(session_factory, clock=BASE_TIME + timedelta(hours=1)).run(
+            source
+        )
+
+        assert source.item_calls == 1  # 额外补了一次目录
+        assert result.items_refreshed is True
+        assert result.prices_written == 6
+        assert result.prices_skipped == 0
+        assert result.status is CollectRunStatus.SUCCESS
+
+    def test_single_new_item_does_not_trigger_an_extra_refresh(
+        self, session_factory, session
+    ) -> None:
+        """偶尔冒出一两个新物品不值得花 20 次资源重拉目录。"""
+        existing = [make_item(str(i)) for i in range(1, 21)]
+        make_collector(session_factory).run(
+            StubSource(existing, [make_price(str(i), 100) for i in range(1, 21)])
+        )
+
+        prices = [make_price(str(i), 100) for i in range(1, 22)]  # 21 号是新物品
+        source = StubSource([make_item("21")], prices)
+        result = make_collector(session_factory, clock=BASE_TIME + timedelta(hours=1)).run(
+            source
+        )
+
+        assert source.item_calls == 0
+        assert result.prices_written == 20
+        assert result.prices_skipped == 1
+        # 偶尔 1 条对不上属于上游噪声，不升级成异常状态
+        assert result.status is CollectRunStatus.SUCCESS
+
+    def test_future_catalog_timestamp_forces_refresh(
+        self, session_factory, session, two_items, two_prices
+    ) -> None:
+        """时间戳落在未来（导入过演示数据、改过系统时间）时目录不可信。"""
+        make_collector(session_factory, clock=BASE_TIME + timedelta(days=3)).run(
+            StubSource(two_items, two_prices)
+        )
+        source = StubSource(two_items, two_prices)
+        result = make_collector(session_factory, clock=BASE_TIME).run(source)
+
+        assert source.item_calls == 1
+        assert result.items_refreshed is True
 
 
 class TestCollectResult:

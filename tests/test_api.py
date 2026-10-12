@@ -214,6 +214,25 @@ class TestItemList:
         body = get_items(client)
         assert body == {"items": [], "total": 0, "limit": 50, "offset": 0}
 
+    def test_prices_from_other_sources_are_hidden(self, client, session, seeded) -> None:
+        """换数据源后，另一套数据不该混进榜单。"""
+        session.add(Item(item_id="777001", name="别的数据源物品", primary_class="gun", grade=3))
+        session.add(
+            CurrentPrice(
+                item_id="777001",
+                price=999,
+                source="delta",
+                status=PriceStatus.OK.value,
+                updated_at=ANCHOR,
+            )
+        )
+        session.commit()
+
+        body = get_items(client)
+        assert [item["item_id"] for item in body["items"]] != ["777001"]
+        assert all(item["item_id"] != "777001" for item in body["items"])
+        assert body["total"] == 3  # 原有的三个物品照常
+
 
 class TestItemHistory:
     def test_default_period_is_24h(self, client, seeded) -> None:
@@ -310,3 +329,21 @@ class TestDashboardSummary:
         assert body["item_count"] == 0
         assert body["rising_count"] == 0
         assert body["stale_count"] == 0
+
+    def test_counts_ignore_other_sources(self, client, session, seeded) -> None:
+        session.add(Item(item_id="777001", name="别的数据源物品", primary_class="gun"))
+        session.add(
+            CurrentPrice(
+                item_id="777001",
+                price=999,
+                bl_today=10.0,
+                source="delta",
+                status=PriceStatus.OK.value,
+                updated_at=ANCHOR,
+            )
+        )
+        session.commit()
+
+        body = client.get("/api/dashboard/summary").json()
+        assert body["priced_count"] == 2
+        assert body["rising_count"] == 1

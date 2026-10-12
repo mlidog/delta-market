@@ -6,9 +6,10 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.database import get_db
 from app.models import CurrentPrice, Item, PriceHistory
 from app.schemas import ItemHistoryOut, ItemListOut, ItemPriceOut, PricePointOut
@@ -66,6 +67,14 @@ def list_items(
     """
     statement = select(Item, CurrentPrice).join(
         CurrentPrice, Item.item_id == CurrentPrice.item_id, isouter=True
+    )
+    # 只展示当前数据源的价格：换源（mock ↔ delta）后，另一套数据不该混进榜单。
+    # 没有价格行的物品（外连接为 NULL）照常保留——它们是待采集目录。
+    statement = statement.where(
+        or_(
+            CurrentPrice.item_id.is_(None),
+            CurrentPrice.source == get_settings().data_source,
+        )
     )
     if category:
         statement = statement.where(Item.primary_class == category)

@@ -18,6 +18,7 @@ router = APIRouter(tags=["dashboard"])
 @router.get("/dashboard/summary", response_model=DashboardSummaryOut, summary="看板摘要")
 def dashboard_summary(db: Session = Depends(get_db)) -> DashboardSummaryOut:
     """物品总数、涨跌家数与最近一次采集状态。"""
+    active_source = get_settings().data_source
     return DashboardSummaryOut(
         item_count=_count(db, select(func.count()).select_from(Item)),
         tradable_count=_count(
@@ -27,34 +28,40 @@ def dashboard_summary(db: Session = Depends(get_db)) -> DashboardSummaryOut:
             db,
             select(func.count())
             .select_from(CurrentPrice)
-            .where(CurrentPrice.price.is_not(None)),
+            .where(
+                CurrentPrice.price.is_not(None),
+                CurrentPrice.source == active_source,
+            ),
         ),
         # 涨跌家数用平台自带的"今日涨跌"口径，它不依赖我们的历史积累，第一天就有数据
         rising_count=_count(
             db,
             select(func.count())
             .select_from(CurrentPrice)
-            .where(CurrentPrice.bl_today > 0),
+            .where(CurrentPrice.bl_today > 0, CurrentPrice.source == active_source),
         ),
         falling_count=_count(
             db,
             select(func.count())
             .select_from(CurrentPrice)
-            .where(CurrentPrice.bl_today < 0),
+            .where(CurrentPrice.bl_today < 0, CurrentPrice.source == active_source),
         ),
         flat_count=_count(
             db,
             select(func.count())
             .select_from(CurrentPrice)
-            .where(CurrentPrice.bl_today == 0),
+            .where(CurrentPrice.bl_today == 0, CurrentPrice.source == active_source),
         ),
         stale_count=_count(
             db,
             select(func.count())
             .select_from(CurrentPrice)
-            .where(CurrentPrice.status == PriceStatus.STALE.value),
+            .where(
+                CurrentPrice.status == PriceStatus.STALE.value,
+                CurrentPrice.source == active_source,
+            ),
         ),
-        data_source=get_settings().data_source,
+        data_source=active_source,
         last_collect=_last_collect(db),
         generated_at=utcnow(),
     )

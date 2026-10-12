@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     )
     collector_retry_times: int = 3
     collector_run_on_startup: bool = True
+    #: 物品基础信息的刷新间隔（天）。`item_info_all` 与 `item_price_all` 各消耗
+    #: 20 次资源，而名称/分类/格数几乎不变，所以默认一周拉一次即可；
+    #: 设为 0 表示每轮都刷新。
+    collector_item_refresh_days: int = 7
 
     @field_validator("collector_cron_hours", mode="before")
     @classmethod

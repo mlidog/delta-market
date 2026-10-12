@@ -8,7 +8,22 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401  导入以注册所有模型
+from app.config import get_settings
 from app.database import Base, attach_sqlite_pragmas
+
+
+@pytest.fixture(autouse=True)
+def _isolated_settings(monkeypatch):
+    """让测试与开发者本地的 `.env` 解耦。
+
+    测试必须固定使用 mock 数据源：否则一旦本地把 `DATA_SOURCE` 切成 delta，
+    断言"当前数据源"的用例就会失败，更糟的是可能真的打到付费接口。
+    环境变量优先级高于 `.env`，再清掉配置缓存即可生效。
+    """
+    monkeypatch.setenv("DATA_SOURCE", "mock")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture()
