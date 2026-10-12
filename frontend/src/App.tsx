@@ -10,6 +10,7 @@ import type {
 } from "./api/types";
 import ItemTable from "./components/ItemTable";
 import PriceChart from "./components/PriceChart";
+import PriceBoard, { type BoardData } from "./components/PriceBoard";
 import StationPanel from "./components/StationPanel";
 import SummaryCards, { statusLabel } from "./components/SummaryCards";
 import {
@@ -57,11 +58,7 @@ export default function App() {
   const [historyError, setHistoryError] = useState<string | null>(null);
 
   // ---- 涨跌榜 ----
-  const [board, setBoard] = useState<{
-    metric: "change_24h_pct" | "bl_today";
-    gainers: ItemPrice[];
-    losers: ItemPrice[];
-  } | null>(null);
+  const [board, setBoard] = useState<BoardData | null>(null);
   const [boardOpen, setBoardOpen] = useState(true);
 
   // ---- 制造排行 ----
@@ -237,59 +234,15 @@ export default function App() {
       {tab === "items" && (
         <>
           {board !== null && (
-            <section className="panel">
-              <div className="panel-head">
-                <h2>
-                  {board.metric === "change_24h_pct" ? "24 小时涨跌榜" : "今日涨跌榜"}
-                  <span className="item-id"> 各 10 件 · 点条目看曲线</span>
-                </h2>
-                <div className="tabs">
-                  {board.metric === "bl_today" && (
-                    <span className="muted" style={{ fontSize: 12 }}>
-                      本地历史不足 24 小时，暂用平台「今日涨跌」
-                    </span>
-                  )}
-                  <button className="chip" onClick={() => setBoardOpen((open) => !open)}>
-                    {boardOpen ? "收起" : "展开"}
-                  </button>
-                </div>
-              </div>
-              {boardOpen && (
-                <div className="board-grid">
-                  {[
-                    { title: "涨幅最大", rows: board.gainers },
-                    { title: "跌幅最大", rows: board.losers },
-                  ].map((column) => (
-                    <div key={column.title} className="board-column">
-                      <h3>{column.title}</h3>
-                      <ol>
-                        {column.rows.map((item) => {
-                          const value =
-                            board.metric === "change_24h_pct"
-                              ? item.change_24h_pct
-                              : item.bl_today;
-                          return (
-                            <li
-                              key={item.item_id}
-                              onClick={() => {
-                                setSelected(item);
-                                setPeriod("7d");
-                              }}
-                            >
-                              <span className="board-name">{item.name}</span>
-                              <span className="board-price">{formatNumber(item.price)}</span>
-                              <span className={`board-change ${changeClass(value)}`}>
-                                {formatPercent(value)}
-                              </span>
-                            </li>
-                          );
-                        })}
-                      </ol>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
+            <PriceBoard
+              board={board}
+              open={boardOpen}
+              onToggle={() => setBoardOpen((open) => !open)}
+              onSelect={(item) => {
+                setSelected(item);
+                setPeriod("7d");
+              }}
+            />
           )}
 
           <section className="panel">

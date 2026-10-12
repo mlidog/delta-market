@@ -256,6 +256,59 @@ tbody tr.selected {
   font-weight: 500;
 }
 
+
+.board-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.hover-card {
+  position: fixed;
+  z-index: 30;
+  pointer-events: none;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(20, 24, 32, 0.14);
+  padding: 10px 12px;
+}
+
+.hover-card-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.hover-card-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hover-card-meta {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 2px 0 6px;
+}
+
+.hover-chart {
+  width: 100%;
+  height: 96px;
+}
+
+.hover-chart-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .col-name {
   min-width: 190px;
 }
