@@ -204,6 +204,63 @@ class TestItemList:
         assert body["total"] == 1
         assert body["items"][0]["item_id"] == "900003"
 
+    def test_search_matches_name_across_all_items(self, client, session, seeded) -> None:
+        """搜索必须在服务端做，覆盖全部物品，而不是只过滤当前页。"""
+        session.add_all(
+            [
+                Item(item_id="770001", name="AKM突击步枪", primary_class="gun", grade=3),
+                Item(item_id="770002", name="AKM长枪管", primary_class="acc", grade=3),
+                Item(item_id="770003", name="M4A1突击步枪", primary_class="gun", grade=4),
+            ]
+        )
+        session.commit()
+
+        body = get_items(client, search="AKM")
+        assert body["total"] == 2
+        assert {item["name"] for item in body["items"]} == {"AKM突击步枪", "AKM长枪管"}
+
+    def test_search_is_case_insensitive_for_ascii(self, client, session, seeded) -> None:
+        session.add(Item(item_id="770001", name="AKM突击步枪", primary_class="gun", grade=3))
+        session.commit()
+
+        assert get_items(client, search="akm")["total"] == 1
+
+    def test_search_combines_with_other_filters(self, client, session, seeded) -> None:
+        session.add_all(
+            [
+                Item(item_id="770001", name="AKM突击步枪", primary_class="gun", grade=3),
+                Item(item_id="770002", name="AKM长枪管", primary_class="acc", grade=3),
+            ]
+        )
+        session.commit()
+
+        body = get_items(client, search="AKM", category="acc")
+        assert body["total"] == 1
+        assert body["items"][0]["name"] == "AKM长枪管"
+
+    def test_search_escapes_wildcards(self, client, seeded) -> None:
+        """输入的 % 应当按字面匹配，不能变成"匹配全部"。"""
+        assert get_items(client, search="%")["total"] == 0
+        assert get_items(client, search="_")["total"] == 0
+
+    def test_blank_search_is_ignored(self, client, seeded) -> None:
+        assert get_items(client, search="   ")["total"] == 3
+
+    def test_search_hits_items_beyond_the_first_page(self, client, session, seeded) -> None:
+        """第 60 个物品也要能被搜到——这是从"只过滤当前页"改过来的核心原因。"""
+        session.add_all(
+            [
+                Item(item_id=f"7800{index:02d}", name=f"批量物品{index}", primary_class="acc", grade=2)
+                for index in range(80)
+            ]
+        )
+        session.add(Item(item_id="900099", name="藏得很深的物品", primary_class="acc", grade=2))
+        session.commit()
+
+        body = get_items(client, search="藏得很深", limit=50, offset=0)
+        assert body["total"] == 1
+        assert body["items"][0]["name"] == "藏得很深的物品"
+
     def test_filter_by_tradable(self, client, seeded) -> None:
         assert get_items(client, tradable=False)["total"] == 1
         assert get_items(client, tradable=True)["total"] == 2

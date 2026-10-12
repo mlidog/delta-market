@@ -75,6 +75,7 @@ CHANGE_SORT_FIELDS = frozenset(
 def list_items(
     category: str | None = Query(None, description="一级分类，如 ammo / acc / gun / collection"),
     sub_category: str | None = Query(None, description="二级分类中文名，如 瞄具 / 胸挂"),
+    search: str | None = Query(None, description="按名称模糊搜索（覆盖全部物品，不只是当前页）"),
     grade: int | None = Query(None, ge=0, le=6, description="物品等级 0~6"),
     tradable: bool | None = Query(None, description="是否只看可在交易行交易的物品"),
     sort: SortField = Query(SortField.price, description="排序字段"),
@@ -106,6 +107,10 @@ def list_items(
         # 实测两种都可能出现，所以两个字段都匹配。
         statement = statement.where(
             or_(Item.second_class_cn == sub_category, Item.second_class == sub_category)
+        )
+    if search and search.strip():
+        statement = statement.where(
+            Item.name.like(f"%{_escape_like(search.strip())}%", escape="\\")
         )
     if grade is not None:
         statement = statement.where(Item.grade == grade)
@@ -246,3 +251,8 @@ def _non_null(value: float | str | None, is_text: bool) -> float | str:
     if value is None:
         return "" if is_text else 0
     return value
+
+
+def _escape_like(value: str) -> str:
+    """转义 LIKE 通配符：用户输入 `%` 或 `_` 时不该把整表都匹配出来。"""
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

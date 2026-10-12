@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { api } from "./api/client";
 import type {
@@ -47,7 +47,8 @@ export default function App() {
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [limit, setLimit] = useState(50);
   const [page, setPage] = useState(1);
-  const [keyword, setKeyword] = useState("");
+  const [keyword, setKeyword] = useState(""); // 输入框里的原始内容
+  const [search, setSearch] = useState(""); // 防抖之后真正发给接口的搜索词
 
   const [selected, setSelected] = useState<ItemPrice | null>(null);
   const [period, setPeriod] = useState<HistoryPeriod>("7d");
@@ -76,6 +77,7 @@ export default function App() {
     try {
       const response = await api.items({
         ...categoryQuery(category),
+        search: search || undefined,
         sort,
         order,
         limit,
@@ -91,11 +93,20 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [category, sort, order, limit, page]);
+  }, [category, search, sort, order, limit, page]);
 
   useEffect(() => {
     void refreshOverview();
   }, [refreshOverview]);
+
+  // 搜索走服务端（覆盖全部物品）。停顿 300ms 再发请求，避免每敲一个字打一次接口。
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setSearch(keyword.trim());
+      setPage(1);
+    }, 300);
+    return () => window.clearTimeout(timer);
+  }, [keyword]);
 
   useEffect(() => {
     if (tab === "items") void refreshItems();
@@ -123,12 +134,6 @@ export default function App() {
       cancelled = true;
     };
   }, [selected, period]);
-
-  const visibleItems = useMemo(() => {
-    const needle = keyword.trim().toLowerCase();
-    if (needle === "") return items;
-    return items.filter((item) => item.name.toLowerCase().includes(needle));
-  }, [items, keyword]);
 
   const pageCount = Math.max(1, Math.ceil(total / limit));
 
@@ -203,7 +208,7 @@ export default function App() {
                   搜索
                   <input
                     value={keyword}
-                    placeholder="按名称过滤当前页"
+                    placeholder="按名称搜索全部物品"
                     onChange={(event) => setKeyword(event.target.value)}
                   />
                 </label>
@@ -271,7 +276,7 @@ export default function App() {
             )}
 
             <ItemTable
-              items={visibleItems}
+              items={items}
               selectedId={selected?.item_id ?? null}
               onSelect={(item) => {
                 setSelected(item);

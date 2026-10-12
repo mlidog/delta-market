@@ -90,6 +90,7 @@ export interface Health {
 export interface ItemQuery {
   category?: string;
   sub_category?: string;
+  search?: string;
   grade?: number;
   tradable?: boolean;
   sort?: string;
