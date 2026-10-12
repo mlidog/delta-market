@@ -14,6 +14,7 @@ from app.data_sources import (
     DataSourceRateLimitError,
     DataSourceResponseError,
     DataSourceUnavailableError,
+    DeltaDataSource,
     ItemRecord,
     MockDataSource,
     create_data_source,
@@ -176,7 +177,13 @@ class TestRegistry:
         with pytest.raises(DataSourceError):
             create_data_source(settings)
 
-    def test_delta_source_is_not_available_before_m6(self) -> None:
+    def test_delta_source_requires_a_token(self) -> None:
         settings = Settings(_env_file=None, data_source="delta")
-        with pytest.raises(ImportError):
+        with pytest.raises(DataSourceAuthError):
             create_data_source(settings)
+
+    def test_delta_source_is_created_with_a_token(self) -> None:
+        settings = Settings(_env_file=None, data_source="delta", delta_api_token="t0ken")
+        source = create_data_source(settings)
+        assert isinstance(source, DeltaDataSource)
+        source.close()

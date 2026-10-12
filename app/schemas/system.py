@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
-from app.schemas.common import UtcModel
+from app.schemas.common import UtcDateTime, UtcModel
 
 
 class HealthOut(UtcModel):
@@ -14,5 +12,5 @@ class HealthOut(UtcModel):
     database: str
     data_source: str
     scheduler_running: bool
-    next_collect_at: datetime | None = None
-    server_time: datetime
+    next_collect_at: UtcDateTime | None = None
+    server_time: UtcDateTime

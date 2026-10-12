@@ -3,20 +3,9 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Annotated
 
-from pydantic import BaseModel, field_serializer
-
-#: 可能出现在响应里的时间字段名，统一按 UTC ISO8601（带 Z）输出。
-#: 一定要带时区标记：裸时间字符串会被前端 `new Date()` 当成**本地时间**解析。
-_DATETIME_FIELDS = (
-    "t",
-    "server_time",
-    "updated_at",
-    "source_updated_at",
-    "generated_at",
-    "started_at",
-    "finished_at",
-)
+from pydantic import BaseModel, PlainSerializer
 
 
 def to_utc_iso(value: datetime | None) -> str | None:
@@ -29,8 +18,18 @@ def to_utc_iso(value: datetime | None) -> str | None:
 
 
 class UtcModel(BaseModel):
-    """时间字段统一序列化的基类。"""
+    """响应模型基类。
 
-    @field_serializer(*_DATETIME_FIELDS, when_used="json", check_fields=False)
-    def _serialize_datetime(self, value: datetime | None) -> str | None:
-        return to_utc_iso(value)
+    时间字段**必须**声明为 `UtcDateTime`（或 `UtcDateTime | None`），
+    不要写成裸 `datetime`——裸时间会被前端 `new Date()` 当成**本地时间**解析，
+    在东八区会整体偏 8 小时。
+    """
+
+
+#: 带 UTC 标记（结尾 `Z`）的 ISO8601 时间字段。
+#: 用类型而不是"字段名清单"来驱动序列化：清单漏一个字段就静默出错，
+#: 而类型写错会立刻在类型检查或断言里暴露。
+UtcDateTime = Annotated[
+    datetime,
+    PlainSerializer(to_utc_iso, return_type=str, when_used="json"),
+]

@@ -12,8 +12,9 @@
 | M3 | 采集服务（写入价格快照） | 完成 |
 | M4 | 四个 API 接口 | 完成 |
 | M5 | 定时任务（每日 0/16/22 点） | 完成 |
-| M6 | DeltaDataSource（真实数据帝 API） | 未开始 |
+| M6 | DeltaDataSource（真实数据帝 API） | 完成 |
 | M7 | 前端看板 | 完成 |
+| M8 | 特勤处制造收益排行 | 完成 |
 
 ## 快速开始
 
@@ -65,6 +66,8 @@ pytest
 | `GET /api/items` | 物品列表，支持 `category` / `sub_category` / `grade` / `tradable` 筛选，`sort` / `order` / `limit` / `offset` 排序分页 |
 | `GET /api/items/{item_id}/history` | 单物品历史曲线，`period` 支持 `1h` / `24h` / `7d` / `30d` |
 | `GET /api/dashboard/summary` | 看板摘要：物品总数、涨跌家数、最近采集状态 |
+| `GET /api/manufacture` | 特勤处制造收益排行，支持 `station` / `level` / `sort=profit\|profit_per_hour` |
+| `POST /api/manufacture/sync` | 立即同步制造收益（⚠️ 消耗平台资源，完整同步 12 次） |
 
 `/api/items` 每项同时给出两套涨跌幅：平台口径（`bl_today` / `day_3_bl` / `day_7_bl` / `day_30_bl`）
 与本地口径（`change_prev_pct` / `change_24h_pct` / `change_7d_pct`）。本地口径依赖自建历史快照，
@@ -77,6 +80,15 @@ pytest
 ```powershell
 .\.venv\Scripts\python.exe -c "from app.services import Collector; print(Collector().run())"
 ```
+
+### 真实数据源联调
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.verify_delta
+```
+
+该脚本会完整同步一次制造收益（12 次资源）、用官方口径交叉校验字段含义，并打印两张排行榜。
+必须用 `-m` 从项目根目录运行。
 
 ## 前端看板
 

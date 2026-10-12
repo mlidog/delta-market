@@ -8,6 +8,12 @@ from app.schemas.item import (
     ItemPriceOut,
     PricePointOut,
 )
+from app.schemas.manufacture import (
+    ManufactureItemOut,
+    ManufactureListOut,
+    ManufactureStationOut,
+    ManufactureSyncOut,
+)
 from app.schemas.system import HealthOut
 
 __all__ = [
@@ -17,6 +23,10 @@ __all__ = [
     "ItemHistoryOut",
     "ItemListOut",
     "ItemPriceOut",
+    "ManufactureItemOut",
+    "ManufactureListOut",
+    "ManufactureStationOut",
+    "ManufactureSyncOut",
     "PricePointOut",
     "UtcModel",
     "to_utc_iso",

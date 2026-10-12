@@ -18,9 +18,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from app.data_sources.base import (
+    STATION_KEYS,
     DataSource,
+    DataSourceResponseError,
     DataSourceUnavailableError,
     ItemRecord,
+    ManufactureRecord,
     PriceRecord,
 )
 from app.utils import utcnow
@@ -136,6 +139,56 @@ class MockDataSource(DataSource):
             for item in MOCK_CATALOG
             if item.is_tradable
         ]
+
+    def fetch_manufacture(self, station_id: int, level: int) -> list[ManufactureRecord]:
+        """生成模拟的制造收益。
+
+        刻意混入负收益条目，方便前端验证"亏损"的排序与配色。
+        """
+        if station_id not in STATION_KEYS:
+            raise DataSourceResponseError(f"未知站点：{station_id}")
+        if level not in (1, 2, 3):
+            raise DataSourceResponseError(f"未知部门等级：{level}")
+
+        station = STATION_KEYS[station_id]
+        moment = self._clock()
+        records: list[ManufactureRecord] = []
+
+        for index, item in enumerate(MOCK_CATALOG):
+            if not item.is_tradable:
+                continue
+            # 每个站点取不同子集，让四张排行有区分度
+            if (index + station_id * 2) % 3 != 0:
+                continue
+
+            seed = index * 7 + station_id * 13 + level * 5
+            period = round(1.5 + (seed % 19) / 2, 1)          # 1.5 ~ 10.5 小时
+            market_price = self._price_at(item, moment)
+            margin = 0.06 + (seed % 11) / 100                  # 6% ~ 16%
+            profit = round(market_price * margin)
+            if seed % 7 == 0:
+                profit = -round(abs(profit) * 0.45)            # 制造即亏的情况
+
+            records.append(
+                ManufactureRecord(
+                    item_key=f"{item.external_id}-{station_id}-{level}",
+                    name=item.name,
+                    station=station,
+                    unlock_level=level,
+                    period_hours=period,
+                    market_price=market_price,
+                    fee=round(market_price * 0.03),
+                    profit=profit,
+                    profit_per_hour=round(profit / period) if period else None,
+                    grade=item.grade,
+                    primary_class=item.primary_class,
+                    second_class_cn=item.second_class_cn,
+                    pic_url=f"https://example.invalid/mock/{item.external_id}.png",
+                    origin="pro",
+                    raw={"name": item.name, "price": profit, "price_hour": round(profit / period)},
+                )
+            )
+        return records
 
     # ------------------------------------------------------------------ #
     # 内部实现

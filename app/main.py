@@ -9,7 +9,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app import __version__
-from app.api.routes import dashboard, health, items
+from app.api.routes import dashboard, health, items, manufacture
 from app.config import get_settings
 from app.database import init_db
 from app.scheduler import create_scheduler
@@ -62,6 +62,7 @@ def create_app() -> FastAPI:
     application.include_router(health.router)
     application.include_router(items.router, prefix="/api")
     application.include_router(dashboard.router, prefix="/api")
+    application.include_router(manufacture.router, prefix="/api")
     return application
 
 

@@ -23,11 +23,13 @@ from apscheduler.triggers.cron import CronTrigger
 
 from app.config import Settings, get_settings
 from app.services import Collector, CollectResult
+from app.services.manufacture import ManufactureSyncResult, sync_manufacture
 
 logger = logging.getLogger(__name__)
 
 COLLECT_JOB_ID = "collect-prices"
 STARTUP_JOB_ID = "collect-prices-on-startup"
+MANUFACTURE_JOB_ID = "sync-manufacture"
 
 #: 错过触发后的补跑宽限期（秒）
 MISFIRE_GRACE_SECONDS = 3600
@@ -66,6 +68,39 @@ def run_collect_once(collector: Collector | None = None) -> CollectResult | None
     return result
 
 
+def run_manufacture_sync() -> ManufactureSyncResult | None:
+    """同步特勤处制造收益（每个站点×等级消耗 1 次资源，完整同步 12 次）。"""
+    from app.data_sources import create_data_source
+    from app.database import SessionLocal
+
+    source = create_data_source()
+    session = SessionLocal()
+    try:
+        result = sync_manufacture(session, source)
+    except Exception:
+        logger.exception("制造收益同步异常终止")
+        return None
+    finally:
+        session.close()
+        source.close()
+
+    if result.ok:
+        logger.info(
+            "制造收益同步完成 记录=%d 请求=%d 组合=%d",
+            result.rows,
+            result.requests,
+            result.station_levels,
+        )
+    else:
+        logger.warning(
+            "制造收益同步部分失败 记录=%d 请求=%d 错误=%s",
+            result.rows,
+            result.requests,
+            "；".join(result.errors),
+        )
+    return result
+
+
 def build_cron_trigger(settings: Settings | None = None) -> CronTrigger:
     """构造每日固定时刻触发的 Cron 触发器。"""
     config = settings or get_settings()
@@ -92,6 +127,17 @@ def create_scheduler(
         trigger=build_cron_trigger(config),
         id=COLLECT_JOB_ID,
         name="采集交易行价格",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+        misfire_grace_time=MISFIRE_GRACE_SECONDS,
+    )
+
+    scheduler.add_job(
+        run_manufacture_sync,
+        trigger=build_cron_trigger(config),
+        id=MANUFACTURE_JOB_ID,
+        name="同步特勤处制造收益",
         replace_existing=True,
         max_instances=1,
         coalesce=True,

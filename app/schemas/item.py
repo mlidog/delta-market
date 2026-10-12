@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from pydantic import BaseModel, Field
 
-from app.schemas.common import UtcModel
+from app.schemas.common import UtcDateTime, UtcModel
 
 
 class ItemPriceOut(UtcModel):
@@ -44,8 +42,8 @@ class ItemPriceOut(UtcModel):
     # --- 数据状态 ---
     status: str = Field("ok", description="ok 表示本轮采集成功，stale 表示保留的是旧价")
     is_stale: bool = False
-    source_updated_at: datetime | None = None
-    updated_at: datetime | None = None
+    source_updated_at: UtcDateTime | None = None
+    updated_at: UtcDateTime | None = None
 
 
 class ItemListOut(BaseModel):
@@ -56,7 +54,7 @@ class ItemListOut(BaseModel):
 
 
 class PricePointOut(UtcModel):
-    t: datetime
+    t: UtcDateTime
     price: int
 
 

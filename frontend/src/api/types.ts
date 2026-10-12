@@ -96,3 +96,61 @@ export interface ItemQuery {
   limit?: number;
   offset?: number;
 }
+
+export interface ManufactureStation {
+  key: string;
+  label: string;
+  station_id: number;
+}
+
+export interface ManufactureItem {
+  item_key: string;
+  name: string;
+  station: string;
+  station_label: string;
+  unlock_level: number;
+  grade: number | null;
+  category: string | null;
+  sub_category: string | null;
+  pic_url: string | null;
+  period_hours: number | null;
+  market_price: number | null;
+  fee: number | null;
+  profit: number | null;
+  profit_per_hour: number | null;
+  implied_material_cost: number | null;
+  origin: string;
+  fetched_at: string | null;
+}
+
+export interface ManufactureListResponse {
+  items: ManufactureItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  stations: ManufactureStation[];
+  levels: number[];
+  origin: string;
+  source: string;
+  fetched_at: string | null;
+}
+
+export interface ManufactureQuery {
+  station?: string;
+  level?: number;
+  origin?: string;
+  source?: string;
+  sort?: string;
+  order?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+}
+
+export interface ManufactureSyncResult {
+  rows: number;
+  requests: number;
+  station_levels: number;
+  errors: string[];
+  started_at: string | null;
+  finished_at: string | null;
+}

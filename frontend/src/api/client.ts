@@ -5,6 +5,9 @@ import type {
   ItemHistoryResponse,
   ItemListResponse,
   ItemQuery,
+  ManufactureListResponse,
+  ManufactureQuery,
+  ManufactureSyncResult,
 } from "./types";
 
 // 开发环境走 vite 代理（同源）；生产环境可用 VITE_API_BASE 指向后端
@@ -28,6 +31,15 @@ function toQueryString(query: ItemQuery): string {
   return params.toString();
 }
 
+async function postJson<T>(path: string): Promise<T> {
+  const response = await fetch(`${BASE_URL}${path}`, { method: "POST" });
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`请求失败 ${response.status} ${path}${body ? ` — ${body.slice(0, 200)}` : ""}`);
+  }
+  return (await response.json()) as T;
+}
+
 export const api = {
   health: () => getJson<Health>("/health"),
   summary: () => getJson<DashboardSummary>("/api/dashboard/summary"),
@@ -36,4 +48,9 @@ export const api = {
     getJson<ItemHistoryResponse>(
       `/api/items/${encodeURIComponent(itemId)}/history?period=${period}`,
     ),
+  manufacture: (query: ManufactureQuery) =>
+    getJson<ManufactureListResponse>(
+      `/api/manufacture?${toQueryString(query as ItemQuery)}`,
+    ),
+  manufactureSync: () => postJson<ManufactureSyncResult>("/api/manufacture/sync"),
 };

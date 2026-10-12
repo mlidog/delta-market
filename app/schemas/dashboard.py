@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from pydantic import Field
 
-from app.schemas.common import UtcModel
+from app.schemas.common import UtcDateTime, UtcModel
 
 
 class CollectRunOut(UtcModel):
@@ -15,8 +13,8 @@ class CollectRunOut(UtcModel):
     status: str
     items_ok: int
     items_failed: int
-    started_at: datetime | None = None
-    finished_at: datetime | None = None
+    started_at: UtcDateTime | None = None
+    finished_at: UtcDateTime | None = None
     error: str | None = None
 
 
@@ -32,4 +30,4 @@ class DashboardSummaryOut(UtcModel):
 
     data_source: str
     last_collect: CollectRunOut | None = None
-    generated_at: datetime
+    generated_at: UtcDateTime

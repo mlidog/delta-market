@@ -11,6 +11,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Self
 
+# --------------------------------------------------------------------------- #
+# 特勤处站点词汇表（接口参数 t 与内部标识的映射）
+# --------------------------------------------------------------------------- #
+STATION_NAMES: dict[int, str] = {1: "技术中心", 2: "工作台", 3: "制药台", 4: "防具台"}
+STATION_KEYS: dict[int, str] = {1: "tech", 2: "workbench", 3: "pharmacy", 4: "armor"}
+STATION_IDS: dict[str, int] = {key: station_id for station_id, key in STATION_KEYS.items()}
+
 
 # --------------------------------------------------------------------------- #
 # 异常体系：M3 的重试策略依据 `retryable` 决定是否重试
@@ -103,6 +110,51 @@ class PriceRecord:
     raw: dict[str, Any] | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class ManufactureRecord:
+    """特勤处制造的一条产出记录。
+
+    关于字段口径（**已用官方接口交叉验证，详见 docs/api_spec.md**）：
+
+    * `profit` 是**扣除材料成本与手续费之后的净收益**，不是售价。
+      文档里写的"真实到手价格（已扣除手续费）"与实际数据不符——示例中
+      `market_price(71469) - fee(2131) ≠ profit(16396)`，而 `profit / period`
+      恰好等于 `profit_per_hour`，说明它是一段时间内的净收益。
+    * `market_price` 对应接口的 `priceMax`（未扣手续费的参考价）。
+    * 我们**拿不到制造配方**，所以无法独立计算材料成本；
+      这里直接采用数据源给出的净收益，不自行反推成本。
+    """
+
+    #: 制造出来的物品标识（数据帝返回的官方 objectID，字符串）
+    item_key: str
+    name: str
+    #: 站点标识：tech / workbench / pharmacy / armor
+    station: str
+    #: 部门等级 1~3（不同等级的生产时长不同，收益也不同）
+    unlock_level: int
+    #: 制造时长（小时）
+    period_hours: float | None = None
+    #: 未扣手续费的参考价
+    market_price: int | None = None
+    #: 手续费 + 上架费
+    fee: int | None = None
+    #: 净收益
+    profit: int | None = None
+    #: 每小时净收益
+    profit_per_hour: int | None = None
+    grade: int | None = None
+    primary_class: str | None = None
+    second_class_cn: str | None = None
+    pic_url: str | None = None
+    #: 系统是否收录（抓取价格）
+    is_get: bool = True
+    #: 是否可在交易行上架
+    is_pay: bool = True
+    #: 该条数据来自哪个接口：pro / official
+    origin: str = "pro"
+    raw: dict[str, Any] | None = None
+
+
 # --------------------------------------------------------------------------- #
 # 接口
 # --------------------------------------------------------------------------- #
@@ -123,6 +175,15 @@ class DataSource(ABC):
     @abstractmethod
     def fetch_prices(self) -> list[PriceRecord]:
         """拉取全量物品最新价格。"""
+
+    @abstractmethod
+    def fetch_manufacture(self, station_id: int, level: int) -> list[ManufactureRecord]:
+        """拉取某个站点、某个部门等级下的特勤处制造收益。
+
+        Args:
+            station_id: 1 技术中心 / 2 工作台 / 3 制药台 / 4 防具台
+            level: 部门等级 1~3（等级不同，生产时长与收益都不同）
+        """
 
     def close(self) -> None:  # noqa: B027  有意留空：多数数据源无需释放资源
         """释放连接池等资源。默认无操作。"""

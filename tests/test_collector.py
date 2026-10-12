@@ -14,6 +14,7 @@ from app.data_sources import (
     DataSourceRateLimitError,
     DataSourceUnavailableError,
     ItemRecord,
+    ManufactureRecord,
     MockDataSource,
     PriceRecord,
 )
@@ -37,11 +38,13 @@ class StubSource(DataSource):
         prices: list[PriceRecord],
         item_errors: tuple[BaseException, ...] = (),
         price_errors: tuple[BaseException, ...] = (),
+        manufacture: list[ManufactureRecord] | None = None,
     ) -> None:
         self._items = list(items)
         self._prices = list(prices)
         self._item_errors = list(item_errors)
         self._price_errors = list(price_errors)
+        self._manufacture = list(manufacture or [])
         self.item_calls = 0
         self.price_calls = 0
 
@@ -56,6 +59,9 @@ class StubSource(DataSource):
         if self._price_errors:
             raise self._price_errors.pop(0)
         return list(self._prices)
+
+    def fetch_manufacture(self, station_id: int, level: int) -> list[ManufactureRecord]:
+        return list(self._manufacture)
 
 
 def make_item(item_id: str, name: str = "测试物品", **kwargs) -> ItemRecord:
