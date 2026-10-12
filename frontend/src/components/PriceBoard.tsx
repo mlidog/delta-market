@@ -108,7 +108,8 @@ export default function PriceBoard({ board, open, onToggle, onSelect }: Props) {
       </section>
 
       <HoverChart
-        item={open ? (hover?.item ?? null) : null}
+        /* 收起状态也要能悬停（收起时只显示前五条，这里曾经被 open 挡住过） */
+        item={hover?.item ?? null}
         x={hover?.x ?? 0}
         y={hover?.y ?? 0}
         metric={board.metric}

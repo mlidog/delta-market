@@ -213,19 +213,6 @@ export default function App() {
               制造排行
             </button>
           </div>
-          <button
-            className="ghost"
-            onClick={() => {
-              void refreshOverview();
-              if (tab === "items") {
-                void refreshItems();
-                void loadBoard();
-              }
-              else setRefreshToken((token) => token + 1);
-            }}
-          >
-            刷新
-          </button>
         </div>
       </header>
 
