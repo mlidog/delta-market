@@ -1,0 +1,29 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# --- 环境变量（含 Token，禁止入库）---
+.env
+.env.local
+
+# --- 数据 ---
+data/
+*.db
+*.sqlite3
+*.log
+
+# --- 前端（M7 阶段）---
+node_modules/
+dist/
+
+# --- 编辑器 / 系统 ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
