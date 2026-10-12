@@ -13,7 +13,7 @@
 | M4 | 四个 API 接口 | 完成 |
 | M5 | 定时任务（每日 0/16/22 点） | 完成 |
 | M6 | DeltaDataSource（真实数据帝 API） | 未开始 |
-| M7 | 前端看板 | 未开始 |
+| M7 | 前端看板 | 完成 |
 
 ## 快速开始
 
@@ -76,4 +76,28 @@ pytest
 
 ```powershell
 .\.venv\Scripts\python.exe -c "from app.services import Collector; print(Collector().run())"
+```
+
+## 前端看板
+
+前端在 `frontend/`，Vite + React + TypeScript + ECharts。
+
+```powershell
+cd frontend
+npm install
+npm run dev          # 打开 http://127.0.0.1:5173
+```
+
+开发服务器会把 `/api` 与 `/health` 代理到 `http://127.0.0.1:8000`（见 `frontend/vite.config.ts`），
+所以要先启动后端。
+
+看板包含三块：
+
+1. **摘要卡片**：物品总数、今日上涨/下跌家数、最近一次采集状态（失败时会有黄色提示条）
+2. **物品行情表**：支持分类筛选、11 种排序字段、翻页，以及"较上次采集 / 较 24 小时前 / 较 7 天前"
+   三组本地口径涨跌幅；显示为 `—` 表示历史不足，不是零波动
+3. **历史曲线**：点击任意行展开，支持 1h / 24h / 7d / 30d 切换
+
+```powershell
+npm run build        # 类型检查 + 生产构建（产物在 frontend/dist）
 ```
