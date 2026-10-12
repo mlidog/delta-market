@@ -1,3 +1,11 @@
+/**
+ * 实时客户端：只请求本地 FastAPI 后端。
+ *
+ * ⚠️ 组件不要直接引用本模块——请从 `src/api/index.ts` 引入 `api`，
+ * 那里会按构建参数在「本地后端」与「静态 JSON」之间切换。
+ * 直接引用本模块会让 GitHub Pages 版去请求不存在的 `/api/...`。
+ */
+
 import type {
   DashboardSummary,
   Health,

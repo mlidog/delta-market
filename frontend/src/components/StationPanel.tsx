@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { api } from "../api/client";
+// 必须从 `../api` 引：那里会按构建参数在「本地后端」与「静态 JSON」之间切换。
+// 直接引 `../api/client` 会让静态站去请求 GitHub Pages 上不存在的 /api 路径。
+import { api } from "../api";
 import type { ManufactureItem } from "../api/types";
 import { MANUFACTURE_PAGE_SIZE } from "../constants";
 import ManufactureTable from "./ManufactureTable";
