@@ -15,6 +15,7 @@ export interface ItemPrice {
   slot_h: number | null;
   slot_area: number | null;
   price_per_slot: number | null;
+  previous_price: number | null;
   price: number | null;
   price_start: number | null;
   bl_today: number | null;

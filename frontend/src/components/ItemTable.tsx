@@ -1,6 +1,11 @@
 import type { ItemPrice } from "../api/types";
 import { categoryLabel, subCategoryLabel } from "../constants";
-import { changeClass, formatNumber, formatPercent } from "../utils/format";
+import {
+  changeClass,
+  formatCollectTime,
+  formatNumber,
+  formatPercent,
+} from "../utils/format";
 
 interface Props {
   items: ItemPrice[];
@@ -28,6 +33,7 @@ export default function ItemTable({ items, selectedId, onSelect, loading }: Prop
             <th className="col-name">物品</th>
             <th>分类</th>
             <th className="num">等级</th>
+            <th className="num">上次价格</th>
             <th className="num">当前价格</th>
             <th className="num">今日（平台）</th>
             <th className="num">较上次采集</th>
@@ -55,7 +61,13 @@ export default function ItemTable({ items, selectedId, onSelect, loading }: Prop
                 )}
               </td>
               <td className="num">{item.grade ?? "—"}</td>
-              <td className="num strong">{formatNumber(item.price)}</td>
+              <td className="num muted">{formatNumber(item.previous_price)}</td>
+              <td className="num strong">
+                {formatNumber(item.price)}
+                {item.updated_at !== null && (
+                  <span className="collect-time">({formatCollectTime(item.updated_at)})</span>
+                )}
+              </td>
               <td className={`num ${changeClass(item.bl_today)}`}>{formatPercent(item.bl_today)}</td>
               <td className={`num ${changeClass(item.change_prev_pct)}`}>
                 {formatPercent(item.change_prev_pct)}

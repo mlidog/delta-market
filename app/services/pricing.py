@@ -32,6 +32,8 @@ class PriceChange:
     """某个物品的三组涨跌幅。"""
 
     price: int | None = None
+    #: 上一次采集的价格（展示用；涨跌幅由它和 price 算出）
+    previous_price: int | None = None
     change_prev_pct: float | None = None
     change_24h_pct: float | None = None
     change_7d_pct: float | None = None
@@ -62,6 +64,7 @@ def load_price_changes(session: Session) -> dict[str, PriceChange]:
     for item_id, (latest_at, price) in latest.items():
         changes[item_id] = PriceChange(
             price=price,
+            previous_price=previous.get(item_id),
             change_prev_pct=change_pct(price, previous.get(item_id)),
             # 参考点必须真的早于该物品自己的最新快照，否则说明这物品已经很久没数据了
             change_24h_pct=_reference_change(price, latest_at, ref_24h.get(item_id)),

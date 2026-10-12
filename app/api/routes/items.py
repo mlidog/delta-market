@@ -206,6 +206,7 @@ def _to_out(
         slot_h=item.slot_h,
         slot_area=area,
         price_per_slot=(latest_price // area) if latest_price is not None and area else None,
+        previous_price=change.previous_price if change else None,
         price=latest_price,
         price_start=price.price_start if price else None,
         bl_today=price.bl_today if price else None,

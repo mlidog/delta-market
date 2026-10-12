@@ -28,6 +28,7 @@ class ItemPriceOut(UtcModel):
     price_per_slot: int | None = Field(None, description="单格价值 = price ÷ slot_area")
 
     # --- 价格 ---
+    previous_price: int | None = Field(None, description="上一次采集的价格")
     price: int | None = None
     price_start: int | None = Field(None, description="平台口径的今日最初价格")
 

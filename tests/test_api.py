@@ -286,12 +286,15 @@ class TestItemList:
 
     def test_local_change_fields_use_history(self, client, seeded) -> None:
         item = get_items(client, category="gun")["items"][0]
+        # 历史快照：[100@-8d, 200@-7d, 400@-30h, 500@-6h, 600@now]
+        assert item["previous_price"] == 500
         assert item["change_prev_pct"] == pytest.approx(20.0)
         assert item["change_24h_pct"] == pytest.approx(50.0)
         assert item["change_7d_pct"] == pytest.approx(200.0)
 
     def test_change_field_is_null_when_history_is_short(self, client, seeded) -> None:
         item = get_items(client, category="ammo")["items"][0]
+        assert item["previous_price"] == 50
         assert item["change_prev_pct"] == pytest.approx(100.0)
         assert item["change_24h_pct"] == pytest.approx(100.0)
         assert item["change_7d_pct"] is None

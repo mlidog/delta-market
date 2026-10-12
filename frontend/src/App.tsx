@@ -56,6 +56,14 @@ export default function App() {
   const [history, setHistory] = useState<ItemHistoryResponse | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
+  // ---- 涨跌榜 ----
+  const [board, setBoard] = useState<{
+    metric: "change_24h_pct" | "bl_today";
+    gainers: ItemPrice[];
+    losers: ItemPrice[];
+  } | null>(null);
+  const [boardOpen, setBoardOpen] = useState(true);
+
   // ---- 制造排行 ----
   const [mfgSort, setMfgSort] = useState<"profit" | "profit_per_hour">("profit_per_hour");
   const [mfgLevel, setMfgLevel] = useState("");
@@ -97,6 +105,27 @@ export default function App() {
     }
   }, [category, grade, search, sort, order, limit, page]);
 
+  /** 24 小时涨跌榜（各 10 件）。本地历史不足 24 小时时退回平台的"今日涨跌"。 */
+  const loadBoard = useCallback(async () => {
+    try {
+      const [top, bottom] = await Promise.all([
+        api.items({ sort: "change_24h_pct", order: "desc", limit: 10 }),
+        api.items({ sort: "change_24h_pct", order: "asc", limit: 10 }),
+      ]);
+      if ((top.items[0]?.change_24h_pct ?? null) !== null) {
+        setBoard({ metric: "change_24h_pct", gainers: top.items, losers: bottom.items });
+        return;
+      }
+      const [gainers, losers] = await Promise.all([
+        api.items({ sort: "bl_today", order: "desc", limit: 10 }),
+        api.items({ sort: "bl_today", order: "asc", limit: 10 }),
+      ]);
+      setBoard({ metric: "bl_today", gainers: gainers.items, losers: losers.items });
+    } catch {
+      setBoard(null);
+    }
+  }, []);
+
   useEffect(() => {
     void refreshOverview();
   }, [refreshOverview]);
@@ -111,8 +140,10 @@ export default function App() {
   }, [keyword]);
 
   useEffect(() => {
-    if (tab === "items") void refreshItems();
-  }, [tab, refreshItems]);
+    if (tab !== "items") return;
+    void refreshItems();
+    void loadBoard();
+  }, [tab, refreshItems, loadBoard]);
 
   useEffect(() => {
     if (selected === null) {
@@ -189,7 +220,10 @@ export default function App() {
             className="ghost"
             onClick={() => {
               void refreshOverview();
-              if (tab === "items") void refreshItems();
+              if (tab === "items") {
+                void refreshItems();
+                void loadBoard();
+              }
               else setRefreshToken((token) => token + 1);
             }}
           >
@@ -202,6 +236,62 @@ export default function App() {
 
       {tab === "items" && (
         <>
+          {board !== null && (
+            <section className="panel">
+              <div className="panel-head">
+                <h2>
+                  {board.metric === "change_24h_pct" ? "24 小时涨跌榜" : "今日涨跌榜"}
+                  <span className="item-id"> 各 10 件 · 点条目看曲线</span>
+                </h2>
+                <div className="tabs">
+                  {board.metric === "bl_today" && (
+                    <span className="muted" style={{ fontSize: 12 }}>
+                      本地历史不足 24 小时，暂用平台「今日涨跌」
+                    </span>
+                  )}
+                  <button className="chip" onClick={() => setBoardOpen((open) => !open)}>
+                    {boardOpen ? "收起" : "展开"}
+                  </button>
+                </div>
+              </div>
+              {boardOpen && (
+                <div className="board-grid">
+                  {[
+                    { title: "涨幅最大", rows: board.gainers },
+                    { title: "跌幅最大", rows: board.losers },
+                  ].map((column) => (
+                    <div key={column.title} className="board-column">
+                      <h3>{column.title}</h3>
+                      <ol>
+                        {column.rows.map((item) => {
+                          const value =
+                            board.metric === "change_24h_pct"
+                              ? item.change_24h_pct
+                              : item.bl_today;
+                          return (
+                            <li
+                              key={item.item_id}
+                              onClick={() => {
+                                setSelected(item);
+                                setPeriod("7d");
+                              }}
+                            >
+                              <span className="board-name">{item.name}</span>
+                              <span className="board-price">{formatNumber(item.price)}</span>
+                              <span className={`board-change ${changeClass(value)}`}>
+                                {formatPercent(value)}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
           <section className="panel">
             <div className="panel-head">
               <h2>物品行情</h2>

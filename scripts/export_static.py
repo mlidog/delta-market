@@ -171,6 +171,7 @@ def export(session: Session) -> dict[str, int]:
                 "slot_h": item_row.slot_h,
                 "slot_area": area,
                 "price_per_slot": (latest // area) if latest is not None and area else None,
+                "previous_price": change.previous_price if change else None,
                 "price": latest,
                 "price_start": price_row.price_start if price_row else None,
                 "bl_today": price_row.bl_today if price_row else None,

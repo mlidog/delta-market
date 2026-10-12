@@ -40,6 +40,20 @@ export function formatClock(value: string | null | undefined): string {
   return date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
 }
 
+/** 采集时间：当天只显示时分，跨天补上日期。 */
+export function formatCollectTime(value: string | null | undefined): string {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const sameDay = date.toDateString() === new Date().toDateString();
+  return date.toLocaleString(
+    "zh-CN",
+    sameDay
+      ? { hour: "2-digit", minute: "2-digit" }
+      : { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" },
+  );
+}
+
 export function formatAxisTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;

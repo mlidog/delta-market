@@ -53,6 +53,7 @@ class TestLoadPriceChanges:
 
         change = load_price_changes(session)["1"]
         assert change.price == 600
+        assert change.previous_price == 500
         assert change.change_prev_pct == pytest.approx(20.0)
         assert change.change_24h_pct == pytest.approx(50.0)
         assert change.change_7d_pct == pytest.approx(200.0)
