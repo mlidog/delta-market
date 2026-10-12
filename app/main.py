@@ -50,6 +50,12 @@ def create_app() -> FastAPI:
     if not logging.getLogger().handlers:
         logging.basicConfig(level=settings.log_level.upper())
 
+    # httpx 会把每个请求的完整 URL 记进 INFO 日志，而数据帝的 Token 就在查询串里
+    # （接口只支持 `?token=` 传参）。所以这两个 logger 必须压到 WARNING，
+    # 否则密钥会被明文写进 logs/server.log。
+    for noisy in ("httpx", "httpcore"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
     application = FastAPI(
         title=settings.app_name,
         version=__version__,

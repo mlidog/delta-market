@@ -43,6 +43,7 @@ export default function App() {
   const [total, setTotal] = useState(0);
   const [listError, setListError] = useState<string | null>(null);
   const [category, setCategory] = useState("");
+  const [grade, setGrade] = useState("");
   const [sort, setSort] = useState("bl_today");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [limit, setLimit] = useState(50);
@@ -77,6 +78,7 @@ export default function App() {
     try {
       const response = await api.items({
         ...categoryQuery(category),
+        grade: grade === "" ? undefined : Number(grade),
         search: search || undefined,
         sort,
         order,
@@ -93,7 +95,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, [category, search, sort, order, limit, page]);
+  }, [category, grade, search, sort, order, limit, page]);
 
   useEffect(() => {
     void refreshOverview();
@@ -224,6 +226,23 @@ export default function App() {
                     {CATEGORY_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  等级
+                  <select
+                    value={grade}
+                    onChange={(event) => {
+                      setGrade(event.target.value);
+                      setPage(1);
+                    }}
+                  >
+                    <option value="">全部等级</option>
+                    {[6, 5, 4, 3, 2, 1].map((value) => (
+                      <option key={value} value={value}>
+                        {value} 级
                       </option>
                     ))}
                   </select>

@@ -17,6 +17,7 @@ data/
 *.db
 *.sqlite3
 *.log
+logs/
 
 # --- 前端（M7 阶段）---
 node_modules/
