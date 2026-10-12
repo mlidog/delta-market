@@ -7,6 +7,8 @@ const backend = "http://127.0.0.1:8000";
 
 export default defineConfig({
   plugins: [react()],
+  // 相对路径产物：无论是 GitHub Pages 的项目子路径还是本地预览都能直接用
+  base: "./",
   server: {
     port: 5173,
     proxy: {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-import { api } from "./api/client";
+import { IS_STATIC, api } from "./api";
 import type {
   DashboardSummary,
   Health,
@@ -400,10 +400,21 @@ export default function App() {
                 </select>
               </label>
               <label>
-                &nbsp;
-                <button className="ghost" disabled={syncing} onClick={() => void runSync()}>
-                  {syncing ? "同步中…" : "同步制造收益"}
-                </button>
+                {IS_STATIC ? (
+                  <>
+                    &nbsp;
+                    <span className="muted" style={{ fontSize: 12 }}>
+                      静态版：数据由 GitHub Actions 定时更新
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    &nbsp;
+                    <button className="ghost" disabled={syncing} onClick={() => void runSync()}>
+                      {syncing ? "同步中…" : "同步制造收益"}
+                    </button>
+                  </>
+                )}
               </label>
             </div>
           </div>
@@ -433,7 +444,10 @@ export default function App() {
       <footer className="footer">
         {health !== null && (
           <span>
-            {health.app} v{health.version} · 调度器 {health.scheduler_running ? "运行中" : "已停止"}{" "}
+            {health.app} v{health.version} ·{" "}
+            {IS_STATIC
+              ? `静态数据快照（${formatDateTime(summary?.generated_at)} 生成）`
+              : `调度器 ${health.scheduler_running ? "运行中" : "已停止"}`}{" "}
             · 最近采集 {statusLabel(summary?.last_collect?.status ?? "unknown")}
           </span>
         )}

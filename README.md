@@ -72,6 +72,9 @@ UTC 值（例如 14:00Z 对应北京时间 22:00）。
 
 ## 启动与接口
 
+> 想让看板跑在 GitHub 上、不依赖自己的电脑？见
+> [docs/deploy-github-pages.md](docs/deploy-github-pages.md)（Actions 定时采集 + 静态数据 + Pages）。
+
 ```powershell
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
