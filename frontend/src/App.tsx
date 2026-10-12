@@ -59,7 +59,7 @@ export default function App() {
 
   // ---- 涨跌榜 ----
   const [board, setBoard] = useState<BoardData | null>(null);
-  const [boardOpen, setBoardOpen] = useState(true);
+  const [boardOpen, setBoardOpen] = useState(false);
 
   // ---- 制造排行 ----
   const [mfgSort, setMfgSort] = useState<"profit" | "profit_per_hour">("profit_per_hour");
@@ -126,6 +126,12 @@ export default function App() {
   useEffect(() => {
     void refreshOverview();
   }, [refreshOverview]);
+
+  /** 点条目选中并在右侧展开曲线；再点同一个则收起。 */
+  const selectItem = useCallback((item: ItemPrice) => {
+    setSelected((current) => (current?.item_id === item.item_id ? null : item));
+    setPeriod("7d");
+  }, []);
 
   // 搜索走服务端（覆盖全部物品）。停顿 300ms 再发请求，避免每敲一个字打一次接口。
   useEffect(() => {
@@ -225,13 +231,11 @@ export default function App() {
               board={board}
               open={boardOpen}
               onToggle={() => setBoardOpen((open) => !open)}
-              onSelect={(item) => {
-                setSelected(item);
-                setPeriod("7d");
-              }}
+              onSelect={selectItem}
             />
           )}
 
+          <div className={`items-layout${selected !== null ? " with-chart" : ""}`}>
           <section className="panel">
             <div className="panel-head">
               <h2>物品行情</h2>
@@ -327,10 +331,7 @@ export default function App() {
             <ItemTable
               items={items}
               selectedId={selected?.item_id ?? null}
-              onSelect={(item) => {
-                setSelected(item);
-                setPeriod("7d");
-              }}
+              onSelect={selectItem}
               loading={loading}
             />
 
@@ -354,7 +355,7 @@ export default function App() {
           </section>
 
           {selected !== null && (
-            <section className="panel">
+            <aside className="panel chart-column">
               <div className="panel-head">
                 <h2>
                   历史价格 · {selected.name}
@@ -394,8 +395,9 @@ export default function App() {
               </div>
 
               <PriceChart history={history} loading={loading} error={historyError} />
-            </section>
+            </aside>
           )}
+          </div>
         </>
       )}
 

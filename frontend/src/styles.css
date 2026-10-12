@@ -210,6 +210,29 @@ tbody tr.selected {
   gap: 20px;
 }
 
+/* 物品行情 + 右侧曲线：选中物品时变成两栏，未选中时单栏 */
+.items-layout {
+  display: grid;
+  gap: 18px;
+  align-items: start;
+}
+
+.items-layout.with-chart {
+  grid-template-columns: minmax(0, 1fr) 380px;
+}
+
+@media (max-width: 1200px) {
+  .items-layout.with-chart {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* 右侧曲线跟随滚动，避免表格很长时曲线被滚出视野 */
+.chart-column {
+  position: sticky;
+  top: 16px;
+}
+
 .board-column h3 {
   margin: 0 0 6px;
   font-size: 13px;
