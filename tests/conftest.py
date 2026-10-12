@@ -36,3 +36,29 @@ def session(session_factory) -> Session:
     db = session_factory()
     yield db
     db.close()
+
+
+@pytest.fixture()
+def client(session_factory):
+    """FastAPI 测试客户端，数据库依赖被替换成内存库。
+
+    故意不用 `with TestClient(...)`：那会触发 lifespan，进而对真实的
+    `data/app.db` 建表，测试不该有这种副作用。
+    """
+    from fastapi.testclient import TestClient
+
+    from app.database import get_db
+    from app.main import create_app
+
+    application = create_app()
+
+    def _override_get_db():
+        db = session_factory()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    application.dependency_overrides[get_db] = _override_get_db
+    yield TestClient(application)
+    application.dependency_overrides.clear()

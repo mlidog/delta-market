@@ -124,7 +124,7 @@ class DataSource(ABC):
     def fetch_prices(self) -> list[PriceRecord]:
         """拉取全量物品最新价格。"""
 
-    def close(self) -> None:
+    def close(self) -> None:  # noqa: B027  有意留空：多数数据源无需释放资源
         """释放连接池等资源。默认无操作。"""
 
     def __enter__(self) -> Self:

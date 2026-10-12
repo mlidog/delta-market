@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from sqlalchemy import (
     DateTime,
@@ -20,7 +20,7 @@ from app.database import Base
 from app.utils import utcnow
 
 
-class PriceStatus(str, Enum):
+class PriceStatus(StrEnum):
     """当前价数据的可用状态。"""
 
     OK = "ok"
