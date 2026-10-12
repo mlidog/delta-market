@@ -6,7 +6,7 @@ from enum import StrEnum
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.api.deps import data_source_dependency
 from app.config import get_settings
@@ -182,6 +182,29 @@ def _ordering(sort: ManufactureSort, order: SortOrder):
     return column.asc().nullslast() if order is SortOrder.asc else column.desc().nullslast()
 
 
+def _highest_level_only(filters: list) -> list:
+    """同一物品在多个等级出现时，只保留等级最高的那一条。
+
+    实测同一产物会在 L1/L2/L3 各出现一次（生产时长与收益都不同），
+    并列展示会让人以为那是三件不同的东西。等级差异本身仍有意义，
+    想单独看某一级时用 `level` 参数筛即可。
+    """
+    higher = aliased(ManufactureProfit)
+    has_higher_level = (
+        select(1)
+        .select_from(higher)
+        .where(
+            higher.station == ManufactureProfit.station,
+            higher.item_key == ManufactureProfit.item_key,
+            higher.origin == ManufactureProfit.origin,
+            higher.source == ManufactureProfit.source,
+            higher.unlock_level > ManufactureProfit.unlock_level,
+        )
+        .exists()
+    )
+    return [*filters, ~has_higher_level]
+
+
 def _resolve_filters(
     db: Session,
     *,
@@ -208,7 +231,12 @@ def _resolve_filters(
         fallback = db.scalar(
             select(ManufactureProfit.source).where(*base_filters).limit(1)
         )
-        return base_filters, fallback or active_source
+        filters = base_filters
+        active_source = fallback or active_source
+
+    # 未指定等级时，同一物品只留最高等级那一条
+    if level is None:
+        filters = _highest_level_only(filters)
     return filters, active_source
 
 

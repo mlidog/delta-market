@@ -6,6 +6,7 @@ import type {
   ItemListResponse,
   ItemQuery,
   ManufactureGroupedResponse,
+  ManufactureListResponse,
   ManufactureQuery,
   ManufactureSyncResult,
 } from "./types";
@@ -49,7 +50,7 @@ export const api = {
       `/api/items/${encodeURIComponent(itemId)}/history?period=${period}`,
     ),
   manufacture: (query: ManufactureQuery) =>
-    getJson<ManufactureGroupedResponse>(
+    getJson<ManufactureListResponse>(
       `/api/manufacture?${toQueryString(query as ItemQuery)}`,
     ),
   manufactureByStation: (query: ManufactureQuery) =>

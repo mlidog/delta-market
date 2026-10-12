@@ -7,15 +7,15 @@ import type {
   HistoryPeriod,
   ItemHistoryResponse,
   ItemPrice,
-  ManufactureGroupedResponse,
 } from "./api/types";
 import ItemTable from "./components/ItemTable";
-import ManufactureTable from "./components/ManufactureTable";
 import PriceChart from "./components/PriceChart";
+import StationPanel from "./components/StationPanel";
 import SummaryCards, { statusLabel } from "./components/SummaryCards";
 import {
   CATEGORY_OPTIONS,
   CHANGE_SORT_VALUES,
+  MANUFACTURE_STATIONS,
   PAGE_SIZES,
   SORT_OPTIONS,
   categoryQuery,
@@ -57,11 +57,10 @@ export default function App() {
   // ---- 制造排行 ----
   const [mfgSort, setMfgSort] = useState<"profit" | "profit_per_hour">("profit_per_hour");
   const [mfgLevel, setMfgLevel] = useState("");
-  const [mfg, setMfg] = useState<ManufactureGroupedResponse | null>(null);
-  const [mfgLoading, setMfgLoading] = useState(false);
-  const [mfgError, setMfgError] = useState<string | null>(null);
   const [mfgNotice, setMfgNotice] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  // 变化时让四个站点面板重新拉数据
+  const [refreshToken, setRefreshToken] = useState(0);
 
   const refreshOverview = useCallback(async () => {
     const [nextSummary, nextHealth] = await Promise.all([
@@ -94,26 +93,6 @@ export default function App() {
     }
   }, [category, sort, order, limit, page]);
 
-  const refreshManufacture = useCallback(async () => {
-    setMfgLoading(true);
-    try {
-      // 按站点分组：四个站点各出一张榜，站内按选定依据排序
-      const response = await api.manufactureByStation({
-        level: mfgLevel === "" ? undefined : Number(mfgLevel),
-        sort: mfgSort,
-        order: "desc",
-        per_station: 20,
-      });
-      setMfg(response);
-      setMfgError(null);
-    } catch (error) {
-      setMfg(null);
-      setMfgError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setMfgLoading(false);
-    }
-  }, [mfgLevel, mfgSort]);
-
   useEffect(() => {
     void refreshOverview();
   }, [refreshOverview]);
@@ -121,10 +100,6 @@ export default function App() {
   useEffect(() => {
     if (tab === "items") void refreshItems();
   }, [tab, refreshItems]);
-
-  useEffect(() => {
-    if (tab === "manufacture") void refreshManufacture();
-  }, [tab, refreshManufacture]);
 
   useEffect(() => {
     if (selected === null) {
@@ -170,13 +145,13 @@ export default function App() {
         `同步完成：写入 ${result.rows} 条，请求 ${result.requests} 次，成功组合 ${result.station_levels}` +
           (result.errors.length > 0 ? `，失败 ${result.errors.length} 个` : ""),
       );
-      await refreshManufacture();
+      setRefreshToken((token) => token + 1);
     } catch (error) {
       setMfgNotice(error instanceof Error ? `同步失败：${error.message}` : "同步失败");
     } finally {
       setSyncing(false);
     }
-  }, [refreshManufacture]);
+  }, []);
 
   return (
     <div className="app">
@@ -208,7 +183,7 @@ export default function App() {
             onClick={() => {
               void refreshOverview();
               if (tab === "items") void refreshItems();
-              else void refreshManufacture();
+              else setRefreshToken((token) => token + 1);
             }}
           >
             刷新
@@ -375,16 +350,13 @@ export default function App() {
           <div className="panel-head">
             <h2>
               特勤处制造收益
-              {mfg?.fetched_at ? (
-                <span className="item-id"> 数据抓取于 {formatDateTime(mfg.fetched_at)}</span>
-              ) : null}
             </h2>
             <div className="filters">
               <label>
                 等级
                 <select value={mfgLevel} onChange={(event) => setMfgLevel(event.target.value)}>
                   <option value="">全部等级</option>
-                  {(mfg?.levels ?? [1, 2, 3]).map((level) => (
+                  {[1, 2, 3].map((level) => (
                     <option key={level} value={level}>
                       {level} 级
                     </option>
@@ -413,31 +385,24 @@ export default function App() {
           </div>
 
           {mfgNotice !== null && <div className="alert">{mfgNotice}</div>}
-          {mfgError !== null && <div className="alert">接口报错：{mfgError}</div>}
 
-          {mfg?.groups.map((group) => (
-            <div key={group.station} className="station-group">
-              <div className="station-head">
-                <h3>{group.label}</h3>
-                <span className="muted">
-                  共 {group.total} 条 · 展示前 {group.items.length} 条
-                </span>
-              </div>
-              <ManufactureTable items={group.items} loading={mfgLoading} rankBy={mfgSort} />
-            </div>
+          {MANUFACTURE_STATIONS.map((station) => (
+            <StationPanel
+              key={station.key}
+              stationKey={station.key}
+              stationLabel={station.label}
+              level={mfgLevel}
+              sort={mfgSort}
+              refreshToken={refreshToken}
+            />
           ))}
 
-          {mfg !== null && (
-            <div className="pager">
-              <span>
-                共 {mfg.groups.reduce((sum, group) => sum + group.total, 0)} 条（数据来源{" "}
-                {mfg.source} · 口径 {mfg.origin}）
-              </span>
-              <span className="muted">
-                总收益 = 一轮制造的净收益；每小时收益 = 净收益 ÷ 制造时长
-              </span>
-            </div>
-          )}
+          <div className="pager">
+            <span className="muted">
+              总收益 = 一轮制造的净收益；每小时收益 = 净收益 ÷ 制造时长；
+              同一产物只显示已解锁的最高等级
+            </span>
+          </div>
         </section>
       )}
 

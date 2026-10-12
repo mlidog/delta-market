@@ -357,6 +357,30 @@ button.ghost:disabled {
   font-size: 12px;
 }
 
+.station-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.thumb-col {
+  width: 44px;
+}
+
+.thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  object-fit: contain;
+  background: #f2f3f5;
+  display: block;
+}
+
+.thumb-empty {
+  border: 1px dashed var(--border);
+  background: transparent;
+}
+
 .chart {
   width: 100%;
   height: 320px;

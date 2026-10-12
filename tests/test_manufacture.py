@@ -248,6 +248,77 @@ def get_groups(client, **params) -> dict:
     return response.json()
 
 
+@pytest.fixture()
+def multi_level_rows(session):
+    """同一个产物在 L1/L2/L3 各出现一次。"""
+    for level, profit in ((1, 100), (2, 200), (3, 300)):
+        session.add(
+            ManufactureProfit(
+                station="tech",
+                unlock_level=level,
+                item_key="same-item",
+                name="跨等级产物",
+                origin="pro",
+                source="mock",
+                period_hours=4.0 + level,
+                profit=profit,
+                profit_per_hour=profit // 4,
+                fetched_at=NOW,
+            )
+        )
+    session.add(
+        ManufactureProfit(
+            station="tech",
+            unlock_level=1,
+            item_key="only-one",
+            name="单等级产物",
+            origin="pro",
+            source="mock",
+            profit=50,
+            profit_per_hour=50,
+            fetched_at=NOW,
+        )
+    )
+    session.commit()
+    return session
+
+
+class TestLevelDeduplication:
+    """同一物品在多个等级出现时，只留等级最高的那条。"""
+
+    def test_duplicate_item_keeps_only_the_highest_level(
+        self, client, multi_level_rows
+    ) -> None:
+        body = get_groups(client)
+        tech = next(group for group in body["groups"] if group["station"] == "tech")
+        rows = {item["name"]: item for item in tech["items"]}
+
+        assert rows["跨等级产物"]["unlock_level"] == 3
+        assert rows["跨等级产物"]["profit"] == 300
+        assert tech["total"] == 2  # 跨等级产物只算一条
+
+    def test_flat_endpoint_dedupes_too(self, client, multi_level_rows) -> None:
+        body = get_rows(client, sort="profit", order="desc")
+        assert body["total"] == 2
+        levels = {item["name"]: item["unlock_level"] for item in body["items"]}
+        assert levels["跨等级产物"] == 3
+
+    def test_level_filter_can_still_target_one_level(
+        self, client, multi_level_rows
+    ) -> None:
+        body = get_rows(client, level=2)
+        assert body["total"] == 1
+        assert body["items"][0]["unlock_level"] == 2
+        assert body["items"][0]["profit"] == 200
+
+    def test_other_stations_are_unaffected(self, client, multi_level_rows) -> None:
+        body = get_groups(client)
+        workbench = next(
+            group for group in body["groups"] if group["station"] == "workbench"
+        )
+        assert workbench["total"] == 0
+
+
 class TestManufactureByStation:
     """站点分组的排行：四个站点各排各的。"""
 

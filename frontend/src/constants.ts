@@ -73,6 +73,17 @@ export function subCategoryLabel(subCategory: string | null): string {
 
 export const PAGE_SIZES = [20, 50, 100, 200] as const;
 
+/** 特勤处站点，顺序与后端 `STATION_KEYS` 保持一致。 */
+export const MANUFACTURE_STATIONS = [
+  { key: "tech", label: "技术中心" },
+  { key: "workbench", label: "工作台" },
+  { key: "pharmacy", label: "制药台" },
+  { key: "armor", label: "防具台" },
+] as const;
+
+/** 制造排行每页条数。 */
+export const MANUFACTURE_PAGE_SIZE = 5;
+
 /** 与后端 `CHANGE_SORT_FIELDS` 保持一致：这些排序会降权收集品与钥匙卡。 */
 export const CHANGE_SORT_VALUES = new Set([
   "bl_today",

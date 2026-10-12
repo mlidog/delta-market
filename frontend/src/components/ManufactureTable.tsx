@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import type { ManufactureItem } from "../api/types";
 import { formatNumber } from "../utils/format";
 
@@ -30,6 +32,7 @@ export default function ManufactureTable({ items, loading, rankBy }: Props) {
         <thead>
           <tr>
             <th className="num">#</th>
+            <th className="thumb-col" />
             <th className="col-name">制造产物</th>
             <th className="num">等级</th>
             <th className="num">时长(h)</th>
@@ -42,6 +45,9 @@ export default function ManufactureTable({ items, loading, rankBy }: Props) {
           {items.map((item, index) => (
             <tr key={`${item.item_key}-${item.station}-${item.unlock_level}`}>
               <td className="num muted">{index + 1}</td>
+              <td className="thumb-col">
+                <Thumbnail url={item.pic_url} alt={item.name} />
+              </td>
               <td className="col-name">
                 <div className="item-name">{item.name}</div>
                 <div className="item-id">
@@ -68,3 +74,20 @@ export default function ManufactureTable({ items, loading, rankBy }: Props) {
     </div>
   );
 }
+/** 图标：加载失败或没有图就留一个占位块，避免出现浏览器默认的破图图标。 */
+function Thumbnail({ url, alt }: { url: string | null; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  if (!url || failed) {
+    return <div className="thumb thumb-empty" aria-hidden="true" />;
+  }
+  return (
+    <img
+      className="thumb"
+      src={url}
+      alt={alt}
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
