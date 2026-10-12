@@ -14,4 +14,5 @@ class HealthOut(UtcModel):
     database: str
     data_source: str
     scheduler_running: bool
+    next_collect_at: datetime | None = None
     server_time: datetime

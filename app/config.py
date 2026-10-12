@@ -45,6 +45,9 @@ class Settings(BaseSettings):
 
     # --- 采集 ---
     collector_timezone: str = "Asia/Shanghai"
+    #: 是否在本进程内启动定时采集。多 worker 部署时应只让一个进程开启，
+    #: 或干脆关闭、由外部调度器调用采集命令。
+    scheduler_enabled: bool = True
     # 用 NoDecode 关闭 pydantic-settings 的 JSON 解析，才能接受 `0,16,22` 这种写法
     collector_cron_hours: Annotated[list[int], NoDecode] = Field(
         default_factory=lambda: list(DEFAULT_CRON_HOURS)

@@ -159,7 +159,7 @@ docs/                  plan.md、api_spec.md
 | M2 | 数据源抽象层 + MockDataSource + api_spec.md | 完成 |
 | M3 | 采集服务（写入快照、失败标记） | 完成 |
 | M4 | 四个 API 接口 | 完成 |
-| M5 | 定时任务 | 待开始 |
+| M5 | 定时任务 | 完成 |
 | M6 | DeltaDataSource（真实数据帝 API） | 待开始 |
 | M7 | 前端看板 | 待开始 |
 

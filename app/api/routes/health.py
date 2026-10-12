@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app import __version__
 from app.config import get_settings
 from app.database import get_db
+from app.scheduler import next_collect_at
 from app.schemas import HealthOut
 from app.utils import utcnow
 
@@ -34,5 +35,6 @@ def health(request: Request, db: Session = Depends(get_db)) -> HealthOut:
         data_source=settings.data_source,
         # 调度器由 M5 接入，这里读取应用状态，未启动时为 False
         scheduler_running=bool(getattr(request.app.state, "scheduler_running", False)),
+        next_collect_at=next_collect_at(getattr(request.app.state, "scheduler", None)),
         server_time=utcnow(),
     )
