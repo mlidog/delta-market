@@ -140,6 +140,24 @@ class TestItemList:
         assert body["total"] == 1
         assert body["items"][0]["name"] == "测试子弹"
 
+    def test_sub_category_filter_also_matches_the_code(self, client, session, seeded) -> None:
+        """数据帝的 props 分类下只有二级代码（如 key），筛选必须能命中它。"""
+        session.add(
+            Item(
+                item_id="888001",
+                name="门禁卡",
+                primary_class="props",
+                second_class="key",
+                second_class_cn=None,
+                grade=6,
+            )
+        )
+        session.commit()
+
+        body = get_items(client, sub_category="key")
+        assert body["total"] == 1
+        assert body["items"][0]["item_id"] == "888001"
+
     def test_filter_by_grade(self, client, seeded) -> None:
         body = get_items(client, grade=6)
         assert body["total"] == 1
@@ -209,6 +227,30 @@ class TestItemList:
         item = get_items(client, category="gun")["items"][0]
         assert item["updated_at"].endswith("Z")
         assert item["source_updated_at"].endswith("Z")
+
+    def test_sub_category_prefers_the_chinese_name(self, client, seeded) -> None:
+        gun = get_items(client, category="gun")["items"][0]
+        assert gun["sub_category"] == "突击步枪"
+
+    def test_sub_category_falls_back_to_code_when_chinese_name_is_missing(
+        self, client, session, seeded
+    ) -> None:
+        """数据帝的兜底分类 props 下 secondClassCN 是空的，不能只丢一个 null 给前端。"""
+        session.add(
+            Item(
+                item_id="888001",
+                name="无中文二级名的物品",
+                primary_class="props",
+                second_class="key",
+                second_class_cn=None,
+                grade=6,
+            )
+        )
+        session.commit()
+
+        item = next(row for row in get_items(client)["items"] if row["item_id"] == "888001")
+        assert item["category"] == "props"
+        assert item["sub_category"] == "key"
 
     def test_empty_database_returns_empty_page(self, client) -> None:
         body = get_items(client)

@@ -79,7 +79,11 @@ def list_items(
     if category:
         statement = statement.where(Item.primary_class == category)
     if sub_category:
-        statement = statement.where(Item.second_class_cn == sub_category)
+        # 二级分类既可能是中文名（secondClassCN），也可能是代码（secondClass）。
+        # 数据帝的兜底分类 props 下只有代码，例如 钥匙卡 = props + key。
+        statement = statement.where(
+            or_(Item.second_class_cn == sub_category, Item.second_class == sub_category)
+        )
     if grade is not None:
         statement = statement.where(Item.grade == grade)
     if tradable is not None:
@@ -164,7 +168,9 @@ def _to_out(
         item_id=item.item_id,
         name=item.name,
         category=item.primary_class,
-        sub_category=item.second_class_cn,
+        # secondClassCN 在"props"这类兜底分类下是空的，此时退回二级分类代码，
+        # 否则前端拿不到任何可用于展示的二级信息
+        sub_category=item.second_class_cn or item.second_class,
         grade=item.grade,
         pic_url=item.pic_url,
         is_tradable=item.is_tradable,

@@ -13,7 +13,7 @@ import ItemTable from "./components/ItemTable";
 import ManufactureTable from "./components/ManufactureTable";
 import PriceChart from "./components/PriceChart";
 import SummaryCards, { statusLabel } from "./components/SummaryCards";
-import { CATEGORY_OPTIONS, PAGE_SIZES, SORT_OPTIONS } from "./constants";
+import { CATEGORY_OPTIONS, PAGE_SIZES, SORT_OPTIONS, categoryQuery } from "./constants";
 import {
   changeClass,
   formatClock,
@@ -70,7 +70,7 @@ export default function App() {
     setLoading(true);
     try {
       const response = await api.items({
-        category: category || undefined,
+        ...categoryQuery(category),
         sort,
         order,
         limit,

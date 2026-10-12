@@ -1,5 +1,5 @@
 import type { ItemPrice } from "../api/types";
-import { CATEGORY_LABELS } from "../constants";
+import { categoryLabel, subCategoryLabel } from "../constants";
 import { changeClass, formatNumber, formatPercent } from "../utils/format";
 
 interface Props {
@@ -48,7 +48,12 @@ export default function ItemTable({ items, selectedId, onSelect, loading }: Prop
                 <div className="item-name">{item.name}</div>
                 <div className="item-id">{item.item_id}</div>
               </td>
-              <td>{item.category ? CATEGORY_LABELS[item.category] ?? item.category : "—"}</td>
+              <td>
+                <div>{categoryLabel(item.category)}</div>
+                {item.sub_category !== null && (
+                  <div className="item-id">{subCategoryLabel(item.sub_category)}</div>
+                )}
+              </td>
               <td className="num">{item.grade ?? "—"}</td>
               <td className="num strong">{formatNumber(item.price)}</td>
               <td className={`num ${changeClass(item.bl_today)}`}>{formatPercent(item.bl_today)}</td>

@@ -13,26 +13,63 @@ export const SORT_OPTIONS = [
   { value: "name", label: "名称" },
 ] as const;
 
-/** 数据帝的一级分类（`primaryClass`）。 */
+/**
+ * 分类筛选项。
+ *
+ * 真实数据里 `primaryClass` 只有 5 种（gun / ammo / acc / protect / props），
+ * 钥匙卡、收集品、消耗品都归在 `props` 下、靠二级分类区分，
+ * 所以这三个选项要走 `sub_category` 过滤。
+ */
 export const CATEGORY_OPTIONS = [
-  { value: "", label: "全部分类" },
-  { value: "gun", label: "枪械" },
-  { value: "ammo", label: "子弹" },
-  { value: "acc", label: "配件" },
-  { value: "protect", label: "防护装备" },
-  { value: "collection", label: "收集品" },
-  { value: "consume", label: "消耗品" },
-  { value: "key", label: "钥匙卡" },
+  { value: "", label: "全部分类", field: "none" },
+  { value: "gun", label: "枪械", field: "category" },
+  { value: "ammo", label: "子弹", field: "category" },
+  { value: "acc", label: "配件", field: "category" },
+  { value: "protect", label: "防护装备", field: "category" },
+  { value: "props", label: "道具", field: "category" },
+  { value: "key", label: "钥匙卡", field: "sub" },
+  { value: "collection", label: "收集品", field: "sub" },
+  { value: "consume", label: "消耗品", field: "sub" },
 ] as const;
+
+/** 把下拉框选中的值翻译成接口参数。 */
+export function categoryQuery(value: string): {
+  category?: string;
+  sub_category?: string;
+} {
+  const option = CATEGORY_OPTIONS.find((item) => item.value === value);
+  if (option === undefined || option.field === "none") return {};
+  return option.field === "category"
+    ? { category: option.value }
+    : { sub_category: option.value };
+}
 
 export const CATEGORY_LABELS: Record<string, string> = {
   gun: "枪械",
   ammo: "子弹",
   acc: "配件",
   protect: "防护装备",
+  props: "道具",
   collection: "收集品",
   consume: "消耗品",
   key: "钥匙卡",
 };
+
+/** 数据帝的兜底分类 `props` 下二级分类才是真正的含义，这里补上中文。 */
+export const SUBCATEGORY_LABELS: Record<string, string> = {
+  collection: "收集品",
+  key: "钥匙卡",
+  consume: "消耗品",
+};
+
+export function categoryLabel(category: string | null): string {
+  if (!category) return "—";
+  return CATEGORY_LABELS[category] ?? category;
+}
+
+export function subCategoryLabel(subCategory: string | null): string {
+  if (!subCategory) return "";
+  return SUBCATEGORY_LABELS[subCategory] ?? subCategory;
+}
 
 export const PAGE_SIZES = [20, 50, 100, 200] as const;
