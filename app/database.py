@@ -9,6 +9,7 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import BASE_DIR, get_settings
@@ -52,14 +53,22 @@ engine = create_engine(
     future=True,
 )
 
-if is_sqlite:
+def attach_sqlite_pragmas(target_engine: Engine) -> None:
+    """让 SQLite 按连接强制外键约束。
 
-    @event.listens_for(engine, "connect")
-    def _enable_sqlite_foreign_keys(dbapi_connection, connection_record) -> None:
-        """SQLite 默认不强制外键，这里按连接显式打开。"""
+    SQLite 默认不校验外键，`ON DELETE CASCADE` 会静默失效；测试用的内存库
+    也需要同样处理，所以做成可复用的函数。
+    """
+
+    @event.listens_for(target_engine, "connect")
+    def _enable_foreign_keys(dbapi_connection, connection_record) -> None:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+
+
+if is_sqlite:
+    attach_sqlite_pragmas(engine)
 
 
 SessionLocal = sessionmaker(
