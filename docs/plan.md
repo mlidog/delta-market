@@ -156,7 +156,7 @@ docs/                  plan.md、api_spec.md
 | --- | --- | --- |
 | M0 | 仓库初始化、依赖、测试框架 | 完成 |
 | M1 | 配置、数据库、ORM 模型 | 完成 |
-| M2 | 数据源抽象层 + MockDataSource + api_spec.md | 待开始 |
+| M2 | 数据源抽象层 + MockDataSource + api_spec.md | 完成 |
 | M3 | 采集服务（写入快照、失败标记） | 待开始 |
 | M4 | 四个 API 接口 | 待开始 |
 | M5 | 定时任务 | 待开始 |
