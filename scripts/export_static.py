@@ -27,13 +27,12 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app import __version__
 from app.config import BASE_DIR, get_settings
-from app.data_sources import create_data_source
-from app.data_sources import STATION_IDS, STATION_NAMES
+from app.data_sources import STATION_IDS, STATION_NAMES, create_data_source
 from app.database import SessionLocal, init_db
 from app.models import CollectRun, CurrentPrice, Item, ManufactureProfit, PriceHistory, PriceStatus
 from app.services import Collector

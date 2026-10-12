@@ -13,7 +13,8 @@ venv/
 .env.local
 
 # --- 数据 ---
-data/
+# 只忽略根目录的数据库文件；frontend/public/data 是导出给 GitHub Pages 的数据快照，必须入库
+/data/
 *.db
 *.sqlite3
 *.log
