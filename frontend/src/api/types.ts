@@ -7,6 +7,7 @@ export interface ItemPrice {
   name: string;
   category: string | null;
   sub_category: string | null;
+  sub_category_code: string | null;
   grade: number | null;
   pic_url: string | null;
   is_tradable: boolean;

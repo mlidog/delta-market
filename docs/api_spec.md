@@ -81,15 +81,22 @@
 | `ammo` | 86 | 子弹 |
 | `gun` | 68 | 枪械 |
 
-关键点：**`key` / `collection` / `consume` 不是一级分类**，它们只是 `props` 下的
-`secondClass`（钥匙卡 80、收集品 349、消耗品 30）。而且这些条目的 `secondClassCN` 是空字符串，
-只能拿 `secondClass` 代码去对应。
+**关键点 1：`key` / `collection` / `consume` 不是一级分类**，它们只是 `props` 下的二级分类
+（中文名分别是 `钥匙` 80、`收集品` 349、`消耗品` 30）。按这三个词筛选必须走 `sub_category`，
+且要同时匹配代码与中文名，否则会返回空结果。
 
-因此：
+**关键点 2（踩过的坑）**：`secondClass` 与 `secondClassCN` 两个字段的**内容与文档描述正好相反**：
 
-- 展示时 `props` → "道具"，并把二级分类作为补充信息显示（如"道具 / 钥匙卡"）
-- 按"钥匙卡 / 收集品 / 消耗品"筛选必须走 `sub_category`，且要同时匹配
-  `secondClassCN`（中文）与 `secondClass`（代码），否则筛选会返回空结果
+| 字段 | 文档说 | 实际是 |
+| --- | --- | --- |
+| `secondClass` | 分类2 | **中文名**（枪管、钥匙、收集品） |
+| `secondClassCN` | 分类2中文名 | **代码**（accBarrel、key、collection） |
+
+照文档映射会把中文名当成代码，前端就会显示成 `accBarrel` 这样。本项目已在
+`DeltaDataSource.fetch_items()` 里做对调，并由 `tests/test_delta_source.py` 锁住这个约定。
+
+因此展示规则是：一级分类 `props` → "道具"，二级分类取中文名作为补充（如"道具 / 钥匙"）；
+拿不到中文名时宁可留空，也不展示代码。
 
 ### 2.2 实测记录（2026-10-12，用户已开通账户）
 
@@ -113,7 +120,9 @@
 | `id` | 第二代数据 ID（已不适用，仅对照） |
 | `objectID` | 三角洲官方小程序 ID |
 | `objectName` | 物品名称 |
-| `primaryClass` / `secondClass` / `secondClassCN` | 一/二/三级分类（如 `ammo` / `6.8x51mm` / `ammo6.8x51`） |
+| `primaryClass` | 一级分类代码（如 `ammo` / `acc` / `props`） |
+| `secondClass` | **二级分类中文名**（如 `枪管` / `钥匙` / `收集品`） |
+| `secondClassCN` | **二级分类代码**（如 `accBarrel` / `key` / `collection`） |
 | `grade` | 等级（0~6） |
 | `is_get` | 是否可在交易行交易，0=不可交易 1=可交易 |
 | `pic` | 图片 URL |

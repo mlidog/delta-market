@@ -14,6 +14,9 @@ class ItemPriceOut(UtcModel):
     name: str
     category: str | None = Field(None, description="一级分类，如 ammo / acc / gun")
     sub_category: str | None = Field(None, description="二级分类中文名，如 瞄具 / 胸挂")
+    sub_category_code: str | None = Field(
+        None, description="二级分类代码，如 accBarrel / key（与中文名并存）"
+    )
     grade: int | None = None
     pic_url: str | None = None
     is_tradable: bool = True

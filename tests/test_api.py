@@ -114,6 +114,47 @@ class TestHealth:
         assert body["server_time"].endswith("Z")
 
 
+def add_high_change_collectibles(session) -> None:
+    """加入两个涨幅极高、但属于降权分类的物品（价格也最高）。"""
+    session.add_all(
+        [
+            Item(
+                item_id="660001",
+                name="高涨幅收集品",
+                primary_class="props",
+                second_class="collection",
+                second_class_cn=None,
+                grade=6,
+            ),
+            CurrentPrice(
+                item_id="660001",
+                price=99999,
+                bl_today=999.0,
+                source="mock",
+                status=PriceStatus.OK.value,
+                updated_at=ANCHOR,
+            ),
+            Item(
+                item_id="660002",
+                name="高涨幅钥匙卡",
+                primary_class="props",
+                second_class="key",
+                second_class_cn=None,
+                grade=6,
+            ),
+            CurrentPrice(
+                item_id="660002",
+                price=88888,
+                bl_today=998.0,
+                source="mock",
+                status=PriceStatus.OK.value,
+                updated_at=ANCHOR,
+            ),
+        ]
+    )
+    session.commit()
+
+
 class TestItemList:
     def test_returns_all_items_with_envelope(self, client, seeded) -> None:
         body = get_items(client)
@@ -255,6 +296,46 @@ class TestItemList:
     def test_empty_database_returns_empty_page(self, client) -> None:
         body = get_items(client)
         assert body == {"items": [], "total": 0, "limit": 50, "offset": 0}
+
+    def test_collectibles_and_keys_go_last_in_change_sorting(
+        self, client, session, seeded
+    ) -> None:
+        """涨幅榜里收集品与钥匙卡降权：涨幅再高也排在正常物品后面。"""
+        add_high_change_collectibles(session)
+
+        body = get_items(client, sort="bl_today", order="desc")
+        assert [item["name"] for item in body["items"]] == [
+            "测试枪械",
+            "测试子弹",
+            "高涨幅收集品",
+            "高涨幅钥匙卡",
+            "不可交易品",
+        ]
+
+    def test_deprioritized_group_keeps_its_own_change_order(
+        self, client, session, seeded
+    ) -> None:
+        add_high_change_collectibles(session)
+
+        items = get_items(client, sort="bl_today", order="desc")["items"]
+        tail = [item["name"] for item in items if item["name"].startswith("高涨幅")]
+        assert tail == ["高涨幅收集品", "高涨幅钥匙卡"]
+
+    def test_price_sorting_does_not_deprioritize(self, client, session, seeded) -> None:
+        """按价格排序时不降权：那时用户要的就是全量排序。"""
+        add_high_change_collectibles(session)
+
+        body = get_items(client, sort="price", order="desc")
+        assert body["items"][0]["name"] == "高涨幅收集品"
+
+    def test_deprioritized_items_are_still_reachable_by_filter(
+        self, client, session, seeded
+    ) -> None:
+        add_high_change_collectibles(session)
+
+        body = get_items(client, sub_category="key")
+        assert body["total"] == 1
+        assert body["items"][0]["name"] == "高涨幅钥匙卡"
 
     def test_prices_from_other_sources_are_hidden(self, client, session, seeded) -> None:
         """换数据源后，另一套数据不该混进榜单。"""

@@ -48,6 +48,29 @@ class SortOrder(StrEnum):
     desc = "desc"
 
 
+#: 涨幅排行里挪到最后的分类：找行情时收集品与钥匙卡噪声太大。
+#: 数据帝把这两类放在 props 兜底分类下，以**二级分类代码**为准（collection / key）。
+#: 中文名也一并兼容——实测钥匙卡的中文名是"钥匙"而不是"钥匙卡"，
+#: 光靠名字判断会漏。
+DEPRIORITIZED_SUB_CATEGORIES = frozenset(
+    {"collection", "key", "收集品", "钥匙", "钥匙卡"}
+)
+
+#: 这些排序字段属于"涨幅排行"，会应用上面的降权规则；
+#: 按价格、单格价值、名称排序时不降权——那时用户要的就是全量排序。
+CHANGE_SORT_FIELDS = frozenset(
+    {
+        SortField.bl_today,
+        SortField.day_3_bl,
+        SortField.day_7_bl,
+        SortField.day_30_bl,
+        SortField.change_prev_pct,
+        SortField.change_24h_pct,
+        SortField.change_7d_pct,
+    }
+)
+
+
 @router.get("/items", response_model=ItemListOut, summary="物品列表")
 def list_items(
     category: str | None = Query(None, description="一级分类，如 ammo / acc / gun / collection"),
@@ -80,7 +103,7 @@ def list_items(
         statement = statement.where(Item.primary_class == category)
     if sub_category:
         # 二级分类既可能是中文名（secondClassCN），也可能是代码（secondClass）。
-        # 数据帝的兜底分类 props 下只有代码，例如 钥匙卡 = props + key。
+        # 实测两种都可能出现，所以两个字段都匹配。
         statement = statement.where(
             or_(Item.second_class_cn == sub_category, Item.second_class == sub_category)
         )
@@ -168,9 +191,9 @@ def _to_out(
         item_id=item.item_id,
         name=item.name,
         category=item.primary_class,
-        # secondClassCN 在"props"这类兜底分类下是空的，此时退回二级分类代码，
-        # 否则前端拿不到任何可用于展示的二级信息
+        # 正常取中文名；个别数据缺中文名时退回代码，避免只丢 null 给前端
         sub_category=item.second_class_cn or item.second_class,
+        sub_category_code=item.second_class,
         grade=item.grade,
         pic_url=item.pic_url,
         is_tradable=item.is_tradable,
@@ -206,6 +229,17 @@ def _sort_rows(rows: list[ItemPriceOut], field: SortField, order: SortOrder) -> 
         reverse=order is SortOrder.desc,
     )
     rows.sort(key=lambda row: getattr(row, field.value) is None)
+    if field in CHANGE_SORT_FIELDS:
+        # 稳定排序：最后执行的这一轮优先级最高，把收集品/钥匙卡整体挪到队尾，
+        # 它们内部仍保持上面的涨幅顺序
+        rows.sort(
+            key=lambda row: (
+                1
+                if row.sub_category_code in DEPRIORITIZED_SUB_CATEGORIES
+                or row.sub_category in DEPRIORITIZED_SUB_CATEGORIES
+                else 0
+            )
+        )
 
 
 def _non_null(value: float | str | None, is_text: bool) -> float | str:

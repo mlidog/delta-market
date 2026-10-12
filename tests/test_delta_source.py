@@ -39,8 +39,8 @@ ITEMS_PAYLOAD = {
             "oid": 0,
             "pic": "https://playerhub.example/1.png",
             "primaryClass": "ammo",
-            "secondClass": "ammo68",
-            "secondClassCN": "ammo6.8x51",
+            "secondClass": "6.8x51mm",
+            "secondClassCN": "ammo68",
             "width": 1,
         },
         {
@@ -53,8 +53,9 @@ ITEMS_PAYLOAD = {
             "oid": 9001,
             "pic": "https://playerhub.example/2.png",
             "primaryClass": "acc",
-            "secondClass": "accScope",
-            "secondClassCN": "瞄具",
+            # ⚠️ 真实接口里 secondClass 是中文名、secondClassCN 是代码，与文档描述相反
+            "secondClass": "瞄准镜",
+            "secondClassCN": "accScope",
             "width": 1,
         },
     ],
@@ -154,11 +155,23 @@ class TestParsing:
         assert item.external_id == "9001"
         assert item.name == "Cobra准直式瞄准镜"
         assert item.primary_class == "acc"
-        assert item.second_class_cn == "瞄具"
+        assert item.second_class == "accScope"  # 代码
+        assert item.second_class_cn == "瞄准镜"  # 中文名
         assert item.grade == 3
         assert item.is_tradable is True
         assert item.object_id == "13110000064"
         assert item.slot_area == 1
+
+    def test_second_class_convention_matches_the_real_api(self) -> None:
+        """`secondClass` 放中文名、`secondClassCN` 放代码——与文档写的相反。
+
+        这是实测踩过的坑：照文档映射会把中文名当成代码，前端就会显示
+        `accBarrel` 这类原始代码。
+        """
+        source = build_source(json_handler(ITEMS_PAYLOAD))
+        item = source.fetch_items()[0]
+        assert item.second_class == "accScope"
+        assert item.second_class_cn == "瞄准镜"
 
     def test_prices_parse_all_change_windows(self) -> None:
         source = build_source(json_handler(PRICES_PAYLOAD))

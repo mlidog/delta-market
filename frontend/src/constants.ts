@@ -55,21 +55,31 @@ export const CATEGORY_LABELS: Record<string, string> = {
   key: "钥匙卡",
 };
 
-/** 数据帝的兜底分类 `props` 下二级分类才是真正的含义，这里补上中文。 */
-export const SUBCATEGORY_LABELS: Record<string, string> = {
-  collection: "收集品",
-  key: "钥匙卡",
-  consume: "消耗品",
-};
-
 export function categoryLabel(category: string | null): string {
   if (!category) return "—";
   return CATEGORY_LABELS[category] ?? category;
 }
 
+/**
+ * 二级分类只在拿到中文名时才展示。
+ *
+ * 数据帝那两个二级分类字段一个放中文名、一个放代码（接口层已经换成中文名）；
+ * 万一上游缺中文名只剩代码，这里宁可留空，也不要把 accBarrel 这类代码丢给用户。
+ */
 export function subCategoryLabel(subCategory: string | null): string {
   if (!subCategory) return "";
-  return SUBCATEGORY_LABELS[subCategory] ?? subCategory;
+  return /[^\x00-\x7F]/.test(subCategory) ? subCategory : "";
 }
 
 export const PAGE_SIZES = [20, 50, 100, 200] as const;
+
+/** 与后端 `CHANGE_SORT_FIELDS` 保持一致：这些排序会降权收集品与钥匙卡。 */
+export const CHANGE_SORT_VALUES = new Set([
+  "bl_today",
+  "day_3_bl",
+  "day_7_bl",
+  "day_30_bl",
+  "change_prev_pct",
+  "change_24h_pct",
+  "change_7d_pct",
+]);

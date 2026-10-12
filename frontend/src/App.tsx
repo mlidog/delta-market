@@ -13,7 +13,13 @@ import ItemTable from "./components/ItemTable";
 import ManufactureTable from "./components/ManufactureTable";
 import PriceChart from "./components/PriceChart";
 import SummaryCards, { statusLabel } from "./components/SummaryCards";
-import { CATEGORY_OPTIONS, PAGE_SIZES, SORT_OPTIONS, categoryQuery } from "./constants";
+import {
+  CATEGORY_OPTIONS,
+  CHANGE_SORT_VALUES,
+  PAGE_SIZES,
+  SORT_OPTIONS,
+  categoryQuery,
+} from "./constants";
 import {
   changeClass,
   formatClock,
@@ -282,6 +288,12 @@ export default function App() {
             </div>
 
             {listError !== null && <div className="alert">接口报错：{listError}</div>}
+
+            {CHANGE_SORT_VALUES.has(sort) && (
+              <div className="hint">
+                涨幅排行中收集品与钥匙卡排在最后；想单独看它们，把「分类」切换成收集品或钥匙卡。
+              </div>
+            )}
 
             <ItemTable
               items={visibleItems}

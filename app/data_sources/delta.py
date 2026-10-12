@@ -81,8 +81,11 @@ class DeltaDataSource(DataSource):
                     external_id=str(oid),
                     name=_as_text(row.get("objectName")) or f"未知物品 {oid}",
                     primary_class=_as_text(row.get("primaryClass")),
-                    second_class=_as_text(row.get("secondClass")),
-                    second_class_cn=_as_text(row.get("secondClassCN")),
+                    # ⚠️ 这两个字段的内容与文档写的正好相反（实测确认）：
+                    # `secondClassCN` 放的是代码（accBarrel），
+                    # `secondClass` 放的才是中文名（枪管）。
+                    second_class=_as_text(row.get("secondClassCN")),
+                    second_class_cn=_as_text(row.get("secondClass")),
                     grade=_as_int(row.get("grade")),
                     pic_url=_as_text(row.get("pic")),
                     is_tradable=_as_int(row.get("is_get")) == 1,
