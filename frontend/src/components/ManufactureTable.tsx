@@ -31,12 +31,10 @@ export default function ManufactureTable({ items, loading, rankBy }: Props) {
           <tr>
             <th className="num">#</th>
             <th className="col-name">制造产物</th>
-            <th>站点</th>
             <th className="num">等级</th>
             <th className="num">时长(h)</th>
             <th className="num">总收益</th>
             <th className="num">每小时</th>
-            <th className="num">推算材料成本</th>
             <th className="num">参考价</th>
           </tr>
         </thead>
@@ -50,7 +48,6 @@ export default function ManufactureTable({ items, loading, rankBy }: Props) {
                   {item.sub_category ?? ""} {item.grade === null ? "" : `· ${item.grade} 级`}
                 </div>
               </td>
-              <td>{item.station_label}</td>
               <td className="num">{item.unlock_level || "—"}</td>
               <td className="num">{item.period_hours === null ? "—" : item.period_hours}</td>
               <td className={`num ${rankBy === "profit" ? "strong" : ""} ${profitClass(item.profit)}`}>
@@ -63,7 +60,6 @@ export default function ManufactureTable({ items, loading, rankBy }: Props) {
               >
                 {formatNumber(item.profit_per_hour)}
               </td>
-              <td className="num muted">{formatNumber(item.implied_material_cost)}</td>
               <td className="num">{formatNumber(item.market_price)}</td>
             </tr>
           ))}

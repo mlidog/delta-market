@@ -242,6 +242,89 @@ def get_rows(client, **params) -> dict:
     return response.json()
 
 
+def get_groups(client, **params) -> dict:
+    response = client.get("/api/manufacture/by-station", params=params)
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+class TestManufactureByStation:
+    """站点分组的排行：四个站点各排各的。"""
+
+    def test_groups_cover_all_four_stations(self, client, manufacture_rows) -> None:
+        body = get_groups(client)
+        assert [group["station"] for group in body["groups"]] == [
+            "tech",
+            "workbench",
+            "pharmacy",
+            "armor",
+        ]
+        assert [group["label"] for group in body["groups"]] == [
+            "技术中心",
+            "工作台",
+            "制药台",
+            "防具台",
+        ]
+
+    def test_each_station_is_ranked_independently(self, client, manufacture_rows) -> None:
+        body = get_groups(client, sort="profit", order="desc")
+        tech = next(group for group in body["groups"] if group["station"] == "tech")
+        assert tech["total"] == 2
+        assert [item["name"] for item in tech["items"]] == ["高总收益", "高时薪低总收益"]
+
+    def test_nulls_stay_last_inside_a_group(self, client, manufacture_rows) -> None:
+        body = get_groups(client, sort="profit", order="desc")
+        workbench = next(group for group in body["groups"] if group["station"] == "workbench")
+        assert [item["name"] for item in workbench["items"]] == ["亏损品", "缺数据"]
+
+    def test_station_without_matching_data_returns_empty_group(
+        self, client, manufacture_rows
+    ) -> None:
+        # 夹具里的 armor 只有官方口径的行，不属于 pro
+        body = get_groups(client)
+        armor = next(group for group in body["groups"] if group["station"] == "armor")
+        assert armor["total"] == 0
+        assert armor["items"] == []
+
+    def test_level_filter_applies_to_every_group(self, client, manufacture_rows) -> None:
+        body = get_groups(client, level=2)
+        tech = next(group for group in body["groups"] if group["station"] == "tech")
+        assert [item["name"] for item in tech["items"]] == ["高时薪低总收益"]
+        workbench = next(group for group in body["groups"] if group["station"] == "workbench")
+        assert workbench["total"] == 0
+
+    def test_per_station_limits_rows(self, client, manufacture_rows) -> None:
+        body = get_groups(client, per_station=1, sort="profit", order="desc")
+        tech = next(group for group in body["groups"] if group["station"] == "tech")
+        assert tech["total"] == 2
+        assert len(tech["items"]) == 1
+        assert body["per_station"] == 1
+
+    def test_default_sort_is_hourly_profit(self, client, manufacture_rows) -> None:
+        body = get_groups(client)
+        assert body["sort"] == "profit_per_hour"
+        tech = next(group for group in body["groups"] if group["station"] == "tech")
+        assert [item["name"] for item in tech["items"]] == ["高总收益", "高时薪低总收益"]
+
+    def test_metadata_is_reported(self, client, manufacture_rows) -> None:
+        body = get_groups(client, sort="profit", order="asc")
+        assert body["order"] == "asc"
+        assert body["origin"] == "pro"
+        assert body["source"] == "mock"
+        assert body["levels"] == [1, 2, 3]
+        assert body["fetched_at"].endswith("Z")
+
+    def test_response_does_not_expose_material_cost(self, client, manufacture_rows) -> None:
+        tech = next(
+            group for group in get_groups(client)["groups"] if group["station"] == "tech"
+        )
+        assert "implied_material_cost" not in tech["items"][0]
+
+    def test_invalid_per_station_is_rejected(self, client, manufacture_rows) -> None:
+        response = client.get("/api/manufacture/by-station", params={"per_station": 999})
+        assert response.status_code == 422
+
+
 class TestManufactureApi:
     def test_default_ranks_by_hourly_profit(self, client, manufacture_rows) -> None:
         body = get_rows(client)
@@ -314,8 +397,6 @@ class TestManufactureApi:
         assert item["period_hours"] == pytest.approx(8.0)
         assert item["profit"] == 90000
         assert item["profit_per_hour"] == 11250
-        # 推算材料成本 = 参考价 120000 − 手续费 3000 − 净收益 90000
-        assert item["implied_material_cost"] == 27000
         assert item["fetched_at"].endswith("Z")
 
     def test_rows_from_other_sources_are_hidden(self, client, session, manufacture_rows) -> None:

@@ -9,8 +9,10 @@ from app.schemas.item import (
     PricePointOut,
 )
 from app.schemas.manufacture import (
+    ManufactureGroupedOut,
     ManufactureItemOut,
     ManufactureListOut,
+    ManufactureStationGroupOut,
     ManufactureStationOut,
     ManufactureSyncOut,
 )
@@ -23,8 +25,10 @@ __all__ = [
     "ItemHistoryOut",
     "ItemListOut",
     "ItemPriceOut",
+    "ManufactureGroupedOut",
     "ManufactureItemOut",
     "ManufactureListOut",
+    "ManufactureStationGroupOut",
     "ManufactureStationOut",
     "ManufactureSyncOut",
     "PricePointOut",

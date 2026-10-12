@@ -24,9 +24,6 @@ class ManufactureItemOut(UtcModel):
     fee: int | None = Field(None, description="手续费 + 上架费")
     profit: int | None = Field(None, description="净收益（已扣除材料成本与手续费）")
     profit_per_hour: int | None = Field(None, description="每小时净收益")
-    implied_material_cost: int | None = Field(
-        None, description="推算材料成本 = 参考价 − 手续费 − 净收益（口径为反推值）"
-    )
 
     origin: str = Field("pro", description="pro=自有源计算，official=官方数据")
     fetched_at: UtcDateTime | None = None
@@ -48,6 +45,29 @@ class ManufactureListOut(UtcModel):
     origin: str
     source: str = Field(description="榜单数据来源（mock / delta）")
     fetched_at: UtcDateTime | None = Field(None, description="本榜数据的抓取时间")
+
+
+class ManufactureStationGroupOut(BaseModel):
+    """一个站点的排行分组。"""
+
+    station: str
+    label: str
+    station_id: int
+    total: int = Field(description="该站点符合筛选条件的条目总数")
+    items: list[ManufactureItemOut]
+
+
+class ManufactureGroupedOut(UtcModel):
+    """按站点分组的制造收益排行。"""
+
+    groups: list[ManufactureStationGroupOut]
+    levels: list[int]
+    origin: str
+    source: str
+    sort: str
+    order: str
+    per_station: int = Field(description="每个站点返回的条目上限")
+    fetched_at: UtcDateTime | None = None
 
 
 class ManufactureSyncOut(UtcModel):

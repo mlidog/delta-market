@@ -7,7 +7,7 @@ import type {
   HistoryPeriod,
   ItemHistoryResponse,
   ItemPrice,
-  ManufactureListResponse,
+  ManufactureGroupedResponse,
 } from "./api/types";
 import ItemTable from "./components/ItemTable";
 import ManufactureTable from "./components/ManufactureTable";
@@ -50,9 +50,8 @@ export default function App() {
 
   // ---- 制造排行 ----
   const [mfgSort, setMfgSort] = useState<"profit" | "profit_per_hour">("profit_per_hour");
-  const [mfgStation, setMfgStation] = useState("");
   const [mfgLevel, setMfgLevel] = useState("");
-  const [mfg, setMfg] = useState<ManufactureListResponse | null>(null);
+  const [mfg, setMfg] = useState<ManufactureGroupedResponse | null>(null);
   const [mfgLoading, setMfgLoading] = useState(false);
   const [mfgError, setMfgError] = useState<string | null>(null);
   const [mfgNotice, setMfgNotice] = useState<string | null>(null);
@@ -92,12 +91,12 @@ export default function App() {
   const refreshManufacture = useCallback(async () => {
     setMfgLoading(true);
     try {
-      const response = await api.manufacture({
-        station: mfgStation || undefined,
+      // 按站点分组：四个站点各出一张榜，站内按选定依据排序
+      const response = await api.manufactureByStation({
         level: mfgLevel === "" ? undefined : Number(mfgLevel),
         sort: mfgSort,
         order: "desc",
-        limit: 100,
+        per_station: 20,
       });
       setMfg(response);
       setMfgError(null);
@@ -107,7 +106,7 @@ export default function App() {
     } finally {
       setMfgLoading(false);
     }
-  }, [mfgStation, mfgLevel, mfgSort]);
+  }, [mfgLevel, mfgSort]);
 
   useEffect(() => {
     void refreshOverview();
@@ -370,17 +369,6 @@ export default function App() {
             </h2>
             <div className="filters">
               <label>
-                站点
-                <select value={mfgStation} onChange={(event) => setMfgStation(event.target.value)}>
-                  <option value="">全部站点</option>
-                  {(mfg?.stations ?? []).map((station) => (
-                    <option key={station.key} value={station.key}>
-                      {station.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
                 等级
                 <select value={mfgLevel} onChange={(event) => setMfgLevel(event.target.value)}>
                   <option value="">全部等级</option>
@@ -415,12 +403,23 @@ export default function App() {
           {mfgNotice !== null && <div className="alert">{mfgNotice}</div>}
           {mfgError !== null && <div className="alert">接口报错：{mfgError}</div>}
 
-          <ManufactureTable items={mfg?.items ?? []} loading={mfgLoading} rankBy={mfgSort} />
+          {mfg?.groups.map((group) => (
+            <div key={group.station} className="station-group">
+              <div className="station-head">
+                <h3>{group.label}</h3>
+                <span className="muted">
+                  共 {group.total} 条 · 展示前 {group.items.length} 条
+                </span>
+              </div>
+              <ManufactureTable items={group.items} loading={mfgLoading} rankBy={mfgSort} />
+            </div>
+          ))}
 
           {mfg !== null && (
             <div className="pager">
               <span>
-                共 {mfg.total} 条（数据来源 {mfg.source} · 口径 {mfg.origin}）
+                共 {mfg.groups.reduce((sum, group) => sum + group.total, 0)} 条（数据来源{" "}
+                {mfg.source} · 口径 {mfg.origin}）
               </span>
               <span className="muted">
                 总收益 = 一轮制造的净收益；每小时收益 = 净收益 ÷ 制造时长

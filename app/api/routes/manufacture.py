@@ -14,8 +14,10 @@ from app.data_sources import STATION_IDS, STATION_KEYS, STATION_NAMES, DataSourc
 from app.database import get_db
 from app.models import ManufactureProfit
 from app.schemas import (
+    ManufactureGroupedOut,
     ManufactureItemOut,
     ManufactureListOut,
+    ManufactureStationGroupOut,
     ManufactureStationOut,
     ManufactureSyncOut,
 )
@@ -40,7 +42,7 @@ class SortOrder(StrEnum):
     desc = "desc"
 
 
-@router.get("/manufacture", response_model=ManufactureListOut, summary="特勤处制造收益排行")
+@router.get("/manufacture", response_model=ManufactureListOut, summary="特勤处制造收益（平铺）")
 def list_manufacture(
     station: str | None = Query(None, description="站点：tech / workbench / pharmacy / armor"),
     level: int | None = Query(None, ge=0, le=3, description="部门等级 1~3"),
@@ -52,75 +54,89 @@ def list_manufacture(
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ) -> ManufactureListOut:
-    """按总收益或每小时收益给制造物品排行。
-
-    两个排序口子对应玩家两种取舍：
+    """跨站点平铺的排行榜。
 
     * `profit`（总收益）：适合"我一天只上线一次，把产能用满"
     * `profit_per_hour`（每小时收益）：适合"我频繁上线，产线不该停"
     """
-    active_source = source or get_settings().data_source
-    base_filters = [ManufactureProfit.origin == origin]
-    if station:
-        base_filters.append(ManufactureProfit.station == station)
-    if level is not None:
-        base_filters.append(ManufactureProfit.unlock_level == level)
-
-    filters = [*base_filters, ManufactureProfit.source == active_source]
-    total = _count(db, filters)
-
-    if total == 0 and source is None:
-        # 当前数据源还没有榜单（典型场景：刚把 DATA_SOURCE 从 mock 切到 delta，
-        # 或者反过来）。此时回退展示库里已有的数据，并在响应里如实报告来源，
-        # 而不是甩给用户一个空排行榜。
-        fallback_total = _count(db, base_filters)
-        if fallback_total:
-            filters = base_filters
-            total = fallback_total
-            active_source = (
-                db.scalar(select(ManufactureProfit.source).where(*base_filters).limit(1))
-                or active_source
-            )
-
-    column = getattr(ManufactureProfit, sort.value)
-    # 空值永远排在最后，避免"缺数据"占据榜首
-    ordering = (
-        column.asc().nullslast() if order is SortOrder.asc else column.desc().nullslast()
+    filters, active_source = _resolve_filters(
+        db, origin=origin, source=source, station=station, level=level
     )
+    total = _count(db, filters)
 
     rows = db.scalars(
         select(ManufactureProfit)
         .where(*filters)
-        .order_by(ordering, ManufactureProfit.name.asc())
+        .order_by(_ordering(sort, order), ManufactureProfit.name.asc())
         .limit(limit)
         .offset(offset)
     ).all()
-
-    fetched_at = db.scalar(select(func.max(ManufactureProfit.fetched_at)).where(*filters))
 
     return ManufactureListOut(
         items=[_to_out(row) for row in rows],
         total=total,
         limit=limit,
         offset=offset,
-        stations=[
-            ManufactureStationOut(
-                key=key,
-                label=STATION_NAMES.get(STATION_IDS[key], key),
-                station_id=STATION_IDS[key],
-            )
-            for key in STATION_KEYS.values()
-        ],
+        stations=_stations(),
         levels=list(DEFAULT_LEVELS),
         origin=origin,
         source=active_source,
-        fetched_at=fetched_at,
+        fetched_at=db.scalar(select(func.max(ManufactureProfit.fetched_at)).where(*filters)),
     )
 
 
-def _count(db: Session, filters: list) -> int:
-    return int(
-        db.scalar(select(func.count()).select_from(ManufactureProfit).where(*filters)) or 0
+@router.get(
+    "/manufacture/by-station",
+    response_model=ManufactureGroupedOut,
+    summary="特勤处制造收益（按站点分组）",
+)
+def list_manufacture_by_station(
+    level: int | None = Query(None, ge=0, le=3, description="部门等级 1~3"),
+    origin: str = Query("pro", description="pro=自有源计算，official=官方数据"),
+    source: str | None = Query(None, description="数据来源，默认取当前配置的数据源"),
+    sort: ManufactureSort = Query(ManufactureSort.profit_per_hour, description="站点内排序字段"),
+    order: SortOrder = Query(SortOrder.desc),
+    per_station: int = Query(10, ge=1, le=50, description="每个站点返回的条目上限"),
+    db: Session = Depends(get_db),
+) -> ManufactureGroupedOut:
+    """四个站点各自一张榜，互不干扰。
+
+    站点的解锁进度与产线数量都不一样，混在一起排的意义有限；
+    分开看才方便回答"我这个站点现在做什么最划算"。
+    """
+    filters, active_source = _resolve_filters(
+        db, origin=origin, source=source, level=level
+    )
+    ordering = _ordering(sort, order)
+
+    groups: list[ManufactureStationGroupOut] = []
+    for key, station_id in STATION_IDS.items():
+        station_filters = [*filters, ManufactureProfit.station == key]
+        rows = db.scalars(
+            select(ManufactureProfit)
+            .where(*station_filters)
+            .order_by(ordering, ManufactureProfit.name.asc())
+            .limit(per_station)
+        ).all()
+        groups.append(
+            ManufactureStationGroupOut(
+                station=key,
+                label=STATION_NAMES.get(station_id, key),
+                station_id=station_id,
+                total=_count(db, station_filters),
+                items=[_to_out(row) for row in rows],
+            )
+        )
+
+    return ManufactureGroupedOut(
+        groups=groups,
+        levels=list(DEFAULT_LEVELS),
+        origin=origin,
+        source=active_source,
+        sort=sort.value,
+        order=order.value,
+        per_station=per_station,
+        fetched_at=db.scalar(select(func.max(ManufactureProfit.fetched_at)).where(*filters)),
     )
 
 
@@ -136,7 +152,6 @@ def sync_now(
     完整同步 4 站点 × 3 等级 = 12 次。
     """
     result = sync_manufacture(db, source, stations=station)
-
     return ManufactureSyncOut(
         rows=result.rows,
         requests=result.requests,
@@ -144,6 +159,62 @@ def sync_now(
         errors=result.errors,
         started_at=result.started_at,
         finished_at=result.finished_at,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# 内部辅助
+# --------------------------------------------------------------------------- #
+def _stations() -> list[ManufactureStationOut]:
+    return [
+        ManufactureStationOut(
+            key=key,
+            label=STATION_NAMES.get(STATION_IDS[key], key),
+            station_id=STATION_IDS[key],
+        )
+        for key in STATION_KEYS.values()
+    ]
+
+
+def _ordering(sort: ManufactureSort, order: SortOrder):
+    """排序表达式：空值永远排在最后，避免"缺数据"占据榜首。"""
+    column = getattr(ManufactureProfit, sort.value)
+    return column.asc().nullslast() if order is SortOrder.asc else column.desc().nullslast()
+
+
+def _resolve_filters(
+    db: Session,
+    *,
+    origin: str,
+    source: str | None,
+    station: str | None = None,
+    level: int | None = None,
+) -> tuple[list, str]:
+    """组装筛选条件，并处理"当前数据源还没有榜单"的过渡态。
+
+    典型场景：刚把 `DATA_SOURCE` 从 mock 切到 delta（或反过来），
+    库里只有另一个数据源的数据。此时回退展示已有数据，并在响应里如实报告来源，
+    而不是甩给用户一个空排行榜。
+    """
+    active_source = source or get_settings().data_source
+    base_filters: list = [ManufactureProfit.origin == origin]
+    if station:
+        base_filters.append(ManufactureProfit.station == station)
+    if level is not None:
+        base_filters.append(ManufactureProfit.unlock_level == level)
+
+    filters = [*base_filters, ManufactureProfit.source == active_source]
+    if source is None and _count(db, filters) == 0 and _count(db, base_filters) > 0:
+        fallback = db.scalar(
+            select(ManufactureProfit.source).where(*base_filters).limit(1)
+        )
+        return base_filters, fallback or active_source
+    return filters, active_source
+
+
+def _count(db: Session, filters: list) -> int:
+    return int(
+        db.scalar(select(func.count()).select_from(ManufactureProfit).where(*filters)) or 0
     )
 
 
@@ -163,18 +234,6 @@ def _to_out(row: ManufactureProfit) -> ManufactureItemOut:
         fee=row.fee,
         profit=row.profit,
         profit_per_hour=row.profit_per_hour,
-        implied_material_cost=_implied_cost(row),
         origin=row.origin,
         fetched_at=row.fetched_at,
     )
-
-
-def _implied_cost(row: ManufactureProfit) -> int | None:
-    """推算材料成本 = 参考价 − 手续费 − 净收益。
-
-    数据帝没有直接提供配方与材料成本，这个值是按 Pro 口径的收益反推出来的，
-    口径已用官方接口交叉校验（详见 docs/api_spec.md）。
-    """
-    if row.market_price is None or row.fee is None or row.profit is None:
-        return None
-    return row.market_price - row.fee - row.profit

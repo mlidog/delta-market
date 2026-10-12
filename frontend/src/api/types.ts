@@ -118,8 +118,26 @@ export interface ManufactureItem {
   fee: number | null;
   profit: number | null;
   profit_per_hour: number | null;
-  implied_material_cost: number | null;
   origin: string;
+  fetched_at: string | null;
+}
+
+export interface ManufactureStationGroup {
+  station: string;
+  label: string;
+  station_id: number;
+  total: number;
+  items: ManufactureItem[];
+}
+
+export interface ManufactureGroupedResponse {
+  groups: ManufactureStationGroup[];
+  levels: number[];
+  origin: string;
+  source: string;
+  sort: string;
+  order: string;
+  per_station: number;
   fetched_at: string | null;
 }
 
@@ -144,6 +162,7 @@ export interface ManufactureQuery {
   order?: "asc" | "desc";
   limit?: number;
   offset?: number;
+  per_station?: number;
 }
 
 export interface ManufactureSyncResult {
