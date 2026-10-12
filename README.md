@@ -60,6 +60,16 @@ pytest
 - 价格批次里有 10% 以上找不到对应物品时（换了数据源、游戏新增物品），
   立刻补一次目录再写价格，避免这一轮的取价白花
 
+**关于长期运行**：现在这个后端是以前台进程方式启动的，**关掉窗口或重启电脑后采集就停了**。
+需要无人值守的话，可以注册一个 Windows 计划任务（登录时自启）把这条命令跑起来：
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+注意 `/health` 里的 `next_collect_at` 是**带 Z 的 UTC 时间**，用 curl/PowerShell 直接看会显示
+UTC 值（例如 14:00Z 对应北京时间 22:00）。
+
 ## 启动与接口
 
 ```powershell
