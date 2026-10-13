@@ -10,12 +10,17 @@
   只补跑一次，而不是把错过的每一轮都堆着补。
 * 启动补采用一次性任务实现，而不是在 lifespan 里同步阻塞启动——
   全量采集要几秒到十几秒，不该卡住服务启动。
+* 启动补采带**新鲜度门限**：最近一条快照比门限更新就跳过。否则每次重启都要
+  多花一轮平台额度（20 次物品采集 + 12 次制造查询），还会在 `price_history`
+  里留下一个和上一轮只差几分钟的重复快照。
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from collections.abc import Callable
+from datetime import datetime, timedelta
+from functools import partial
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -24,6 +29,7 @@ from apscheduler.triggers.cron import CronTrigger
 from app.config import Settings, get_settings
 from app.services import Collector, CollectResult, publish_site_data
 from app.services.manufacture import ManufactureSyncResult, sync_manufacture
+from app.utils import utcnow
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +140,58 @@ def build_cron_trigger(settings: Settings | None = None) -> CronTrigger:
     )
 
 
+def latest_snapshot_at() -> datetime | None:
+    """最近一条价格快照的时间（naive UTC）；库里还没有任何快照时返回 None。
+
+    读不到时按 None 处理，调用方会因此照常补采——宁可多采一轮，
+    也不该因为查询出错就让看板一直停在旧数据上。
+    """
+    from sqlalchemy import func, select
+
+    from app.database import SessionLocal
+    from app.models import PriceHistory
+
+    session = SessionLocal()
+    try:
+        return session.scalar(select(func.max(PriceHistory.recorded_at)))
+    except Exception:
+        logger.exception("读取最近快照时间失败，按需要补采处理")
+        return None
+    finally:
+        session.close()
+
+
+def run_startup_pipeline(
+    job: Callable[[], None] | None = None,
+    settings: Settings | None = None,
+) -> None:
+    """启动补采：数据还新鲜就跳过，避免每次重启都白打一轮接口。
+
+    门限取 `COLLECTOR_STARTUP_MIN_INTERVAL_HOURS`（默认 12 小时）。
+    定时任务不走这里——到点的轮次必须照常采集。
+    """
+    config = settings or get_settings()
+    threshold = config.collector_startup_min_interval_hours
+    latest = latest_snapshot_at()
+
+    if threshold > 0 and latest is not None:
+        age_hours = (utcnow() - latest).total_seconds() / 3600
+        if age_hours < threshold:
+            logger.info(
+                "启动补采跳过：最近快照距今 %.1f 小时，未超过门限 %.1f 小时",
+                age_hours,
+                threshold,
+            )
+            return
+        logger.info(
+            "启动补采执行：最近快照距今 %.1f 小时，已超过门限 %.1f 小时",
+            age_hours,
+            threshold,
+        )
+
+    (job or run_pipeline)()
+
+
 def create_scheduler(
     settings: Settings | None = None,
     *,
@@ -157,12 +215,13 @@ def create_scheduler(
     )
 
     if config.collector_run_on_startup:
+        # 走带新鲜度门限的包装：重启不再等于"立刻多采一轮"
         scheduler.add_job(
-            job,
+            partial(run_startup_pipeline, job=job, settings=config),
             trigger="date",
             run_date=now or datetime.now(timezone),
             id=STARTUP_JOB_ID,
-            name="启动补采并发布",
+            name="启动补采并发布（数据新鲜则跳过）",
             replace_existing=True,
             max_instances=1,
         )

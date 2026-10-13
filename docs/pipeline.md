@@ -17,7 +17,11 @@
 - APScheduler `BackgroundScheduler`，cron 表达式 `hour=0,16,22 minute=0`，时区 `Asia/Shanghai`
 - 只注册**一个** job（id `collect-prices`），触发 `run_pipeline()`
   - 三步串在同一个 job 里是为了保证顺序：导出必须在采集与同步之后
-- `COLLECTOR_RUN_ON_STARTUP=true` 时额外挂一个一次性任务，启动后立刻跑同一条流水线
+- `COLLECTOR_RUN_ON_STARTUP=true` 时额外挂一个一次性任务，启动后跑同一条流水线，
+  但先过一道新鲜度门限：最近快照距今不足 `COLLECTOR_STARTUP_MIN_INTERVAL_HOURS`
+  （默认 12 小时）就直接跳过。这挡的是"改个代码重启一次就多采一轮"——
+  每轮 20 次物品采集 + 12 次制造查询，还会在 `price_history` 里留下一个
+  和上一轮只差几分钟的快照，让"较上次采集"永远显示成 0 变化
 - 三个保护：`max_instances=1`（绝不并发）、`coalesce` + 1 小时宽限（休眠/重启错过时只补一次）、
   异常被吞掉只记日志（一次失败不影响后续轮次）
 - ⚠️ 必须单 worker 运行 uvicorn，否则多个进程会各跑一套定时任务

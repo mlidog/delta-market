@@ -9,18 +9,23 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import pytest
 from fastapi.testclient import TestClient
 
+import app.database as database_module
+import app.scheduler as scheduler_module
 from app.config import Settings
-from app.models import CollectRunStatus
+from app.models import CollectRunStatus, Item, PriceHistory
 from app.scheduler import (
     COLLECT_JOB_ID,
     MISFIRE_GRACE_SECONDS,
     STARTUP_JOB_ID,
     build_cron_trigger,
     create_scheduler,
+    latest_snapshot_at,
     next_collect_at,
     run_collect_once,
+    run_startup_pipeline,
 )
 from app.services import CollectResult
+from app.utils import utcnow
 
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
@@ -103,6 +108,18 @@ class TestCreateScheduler:
         # 启动补采是一次性任务，触发时间就是传入的"当前时间"
         assert job.trigger.run_date == at(10)
 
+    def test_startup_job_wrapped_by_stale_guard(self) -> None:
+        """启动补采必须走门限包装，而不是直接跑整条流水线。"""
+        from functools import partial
+
+        scheduler = create_scheduler(
+            Settings(_env_file=None, collector_run_on_startup=True), now=at(10)
+        )
+        job = scheduler.get_job(STARTUP_JOB_ID)
+        assert job is not None
+        assert isinstance(job.func, partial)
+        assert job.func.func is scheduler_module.run_startup_pipeline
+
     def test_startup_job_absent_when_disabled(self) -> None:
         scheduler = create_scheduler(
             Settings(_env_file=None, collector_run_on_startup=False)
@@ -177,6 +194,89 @@ class TestRunCollectOnce:
         with caplog.at_level(logging.ERROR, logger="app.scheduler"):
             assert run_collect_once(collector) is None
         assert "采集任务异常终止" in caplog.text
+
+
+class TestStartupStaleGuard:
+    """启动补采的新鲜度门限：数据够新就别再白打一轮接口。"""
+
+    @staticmethod
+    def settings(hours: float) -> Settings:
+        return Settings(_env_file=None, collector_startup_min_interval_hours=hours)
+
+    def test_skips_when_snapshot_is_fresh(self, monkeypatch, caplog) -> None:
+        monkeypatch.setattr(
+            scheduler_module, "latest_snapshot_at", lambda: utcnow() - timedelta(hours=1)
+        )
+        calls: list[str] = []
+        with caplog.at_level(logging.INFO, logger="app.scheduler"):
+            run_startup_pipeline(lambda: calls.append("run"), self.settings(12))
+
+        assert calls == []
+        assert "启动补采跳过" in caplog.text
+
+    def test_runs_when_snapshot_is_older_than_threshold(self, monkeypatch, caplog) -> None:
+        monkeypatch.setattr(
+            scheduler_module, "latest_snapshot_at", lambda: utcnow() - timedelta(hours=13)
+        )
+        calls: list[str] = []
+        with caplog.at_level(logging.INFO, logger="app.scheduler"):
+            run_startup_pipeline(lambda: calls.append("run"), self.settings(12))
+
+        assert calls == ["run"]
+        assert "启动补采执行" in caplog.text
+
+    def test_skips_just_below_threshold(self, monkeypatch) -> None:
+        monkeypatch.setattr(
+            scheduler_module,
+            "latest_snapshot_at",
+            lambda: utcnow() - timedelta(hours=11, minutes=59),
+        )
+        calls: list[str] = []
+        run_startup_pipeline(lambda: calls.append("run"), self.settings(12))
+        assert calls == []
+
+    def test_runs_when_no_snapshot_exists(self, monkeypatch) -> None:
+        """空库第一次启动必须真的采一次，否则看板永远是空的。"""
+        monkeypatch.setattr(scheduler_module, "latest_snapshot_at", lambda: None)
+        calls: list[str] = []
+        run_startup_pipeline(lambda: calls.append("run"), self.settings(12))
+        assert calls == ["run"]
+
+    def test_runs_when_threshold_disabled(self, monkeypatch) -> None:
+        """门限设为 0 = 旧行为：每次启动都补采。"""
+        monkeypatch.setattr(scheduler_module, "latest_snapshot_at", lambda: utcnow())
+        calls: list[str] = []
+        run_startup_pipeline(lambda: calls.append("run"), self.settings(0))
+        assert calls == ["run"]
+
+    def test_default_threshold_is_twelve_hours(self) -> None:
+        assert Settings(_env_file=None).collector_startup_min_interval_hours == 12.0
+
+
+class TestLatestSnapshotAt:
+    def test_reads_newest_snapshot_from_db(
+        self, monkeypatch, session, session_factory
+    ) -> None:
+        session.add(Item(item_id="snap-1", name="测试物品"))
+        session.add_all(
+            [
+                PriceHistory(
+                    item_id="snap-1", price=100, recorded_at=datetime(2026, 10, 13, 8, 0)
+                ),
+                PriceHistory(
+                    item_id="snap-1", price=120, recorded_at=datetime(2026, 10, 13, 16, 0)
+                ),
+            ]
+        )
+        session.commit()
+        # 函数内部是调用时才导入 SessionLocal，替换模块属性即可指向内存库
+        monkeypatch.setattr(database_module, "SessionLocal", session_factory)
+
+        assert latest_snapshot_at() == datetime(2026, 10, 13, 16, 0)
+
+    def test_returns_none_on_empty_db(self, monkeypatch, session_factory) -> None:
+        monkeypatch.setattr(database_module, "SessionLocal", session_factory)
+        assert latest_snapshot_at() is None
 
 
 class TestLifespanWiring:

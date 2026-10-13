@@ -45,7 +45,9 @@ pytest
 
 应用启动后会拉起调度器，按 `COLLECTOR_CRON_HOURS`（默认北京时间 0 / 16 / 22 点）自动采集。
 
-- `COLLECTOR_RUN_ON_STARTUP=true` 时启动后会立刻补采一次，避免看板为空
+- `COLLECTOR_RUN_ON_STARTUP=true` 时启动后会补采一次，避免看板为空；
+  但最近一条快照距今不足 `COLLECTOR_STARTUP_MIN_INTERVAL_HOURS`（默认 12 小时）时跳过——
+  否则每次重启都白花一轮额度，还会留下和上一轮只差几分钟的重复快照
 - `SCHEDULER_ENABLED=false` 可整体关闭本进程的定时采集
 - `/health` 的 `next_collect_at` 字段能看到下一次采集时间
 
