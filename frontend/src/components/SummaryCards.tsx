@@ -1,9 +1,20 @@
-import type { DashboardSummary } from "../api/types";
-import { formatDateTime, formatNumber } from "../utils/format";
+import { useState } from "react";
+
+import type { DashboardSummary, ItemPrice } from "../api/types";
+import { MOVER_LIMIT } from "../constants";
+import { changeClass, formatDateTime, formatNumber, formatPercent } from "../utils/format";
+
+export interface MoverGroup {
+  key: string;
+  label: string;
+  items: ItemPrice[];
+}
 
 interface Props {
   summary: DashboardSummary | null;
   loading: boolean;
+  /** 三个分类的"今日变动最大"列表（已按变动幅度排序） */
+  movers: MoverGroup[];
 }
 
 export function statusLabel(status: string): string {
@@ -21,7 +32,80 @@ export function statusLabel(status: string): string {
   }
 }
 
-export default function SummaryCards({ summary, loading }: Props) {
+/** 图标：加载失败就留白，不要出现浏览器默认的破图图标。 */
+function ItemIcon({ url, size }: { url: string | null; size: number }) {
+  const [failed, setFailed] = useState(false);
+  const style = { width: size, height: size };
+  if (!url || failed) {
+    return <div className="mover-icon mover-icon-empty" style={style} aria-hidden="true" />;
+  }
+  return (
+    <img
+      className="mover-icon"
+      style={style}
+      src={url}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+function MoverCard({ group }: { group: MoverGroup }) {
+  const [expanded, setExpanded] = useState(false);
+  const [top, ...rest] = group.items;
+
+  return (
+    <div className="card mover-card">
+      <div className="card-label">
+        {group.label}
+        <span className="mover-tag">今日变动最大</span>
+      </div>
+
+      {top === undefined ? (
+        <div className="card-hint">暂无数据</div>
+      ) : (
+        <>
+          <div className="mover-row mover-row-top">
+            <ItemIcon url={top.pic_url} size={40} />
+            <div className="mover-main">
+              <div className="item-name">{top.name}</div>
+              <div className="mover-price">
+                {formatNumber(top.price)}
+                <span className={changeClass(top.bl_today)}>
+                  {formatPercent(top.bl_today)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {expanded && rest.length > 0 && (
+            <ol className="mover-list">
+              {rest.map((item) => (
+                <li key={item.item_id}>
+                  <ItemIcon url={item.pic_url} size={22} />
+                  <span className="mover-list-name">{item.name}</span>
+                  <span className="mover-list-price">{formatNumber(item.price)}</span>
+                  <span className={`mover-list-change ${changeClass(item.bl_today)}`}>
+                    {formatPercent(item.bl_today)}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
+
+          {group.items.length > 1 && (
+            <button className="chip mover-toggle" onClick={() => setExpanded((open) => !open)}>
+              {expanded ? "收起" : `展开（共 ${group.items.length} 个，最多 ${MOVER_LIMIT}）`}
+            </button>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+export default function SummaryCards({ summary, loading, movers }: Props) {
   if (loading && summary === null) {
     return (
       <div className="summary-grid">
@@ -42,21 +126,6 @@ export default function SummaryCards({ summary, loading }: Props) {
     <>
       <div className="summary-grid">
         <div className="card">
-          <div className="card-label">物品总数</div>
-          <div className="card-value">{formatNumber(summary.item_count)}</div>
-          <div className="card-hint">可交易 {formatNumber(summary.tradable_count)}</div>
-        </div>
-        <div className="card">
-          <div className="card-label">今日上涨</div>
-          <div className="card-value up">{formatNumber(summary.rising_count)}</div>
-          <div className="card-hint">有价格 {formatNumber(summary.priced_count)} 个</div>
-        </div>
-        <div className="card">
-          <div className="card-label">今日下跌</div>
-          <div className="card-value down">{formatNumber(summary.falling_count)}</div>
-          <div className="card-hint">持平 {formatNumber(summary.flat_count)} 个</div>
-        </div>
-        <div className="card">
           <div className="card-label">最近一次采集</div>
           <div className={`card-value ${failed ? "warn" : last ? "up" : "muted"}`}>
             {last ? statusLabel(last.status) : "尚无记录"}
@@ -67,6 +136,10 @@ export default function SummaryCards({ summary, loading }: Props) {
               : "等待首次采集"}
           </div>
         </div>
+
+        {movers.map((group) => (
+          <MoverCard key={group.key} group={group} />
+        ))}
       </div>
       {(summary.stale_count > 0 || failed) && (
         <div className="alert">

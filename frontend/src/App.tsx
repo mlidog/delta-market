@@ -5,31 +5,25 @@ import type {
   DashboardSummary,
   Health,
   HistoryPeriod,
-  ItemHistoryResponse,
   ItemPrice,
 } from "./api/types";
 import ItemTable from "./components/ItemTable";
-import PriceChart from "./components/PriceChart";
 import PriceBoard, { type BoardData } from "./components/PriceBoard";
 import StationPanel from "./components/StationPanel";
-import SummaryCards, { statusLabel } from "./components/SummaryCards";
+import ChartPanel from "./components/ChartPanel";
+import SummaryCards, { statusLabel, type MoverGroup } from "./components/SummaryCards";
 import {
   CATEGORY_OPTIONS,
   CHANGE_SORT_VALUES,
   MANUFACTURE_STATIONS,
+  MOVER_CATEGORIES,
+  MOVER_LIMIT,
   PAGE_SIZES,
   SORT_OPTIONS,
   categoryQuery,
 } from "./constants";
-import {
-  changeClass,
-  formatClock,
-  formatDateTime,
-  formatNumber,
-  formatPercent,
-} from "./utils/format";
+import { formatClock, formatDateTime } from "./utils/format";
 
-const PERIODS: HistoryPeriod[] = ["1h", "24h", "7d", "30d"];
 type Tab = "items" | "manufacture";
 
 export default function App() {
@@ -53,9 +47,9 @@ export default function App() {
   const [search, setSearch] = useState(""); // 防抖之后真正发给接口的搜索词
 
   const [selected, setSelected] = useState<ItemPrice | null>(null);
-  const [period, setPeriod] = useState<HistoryPeriod>("7d");
-  const [history, setHistory] = useState<ItemHistoryResponse | null>(null);
-  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [period, setPeriod] = useState<HistoryPeriod>("24h");
+  // 三个分类的"今日变动最大"（顶部卡片用）
+  const [movers, setMovers] = useState<MoverGroup[]>([]);
 
   // ---- 涨跌榜 ----
   const [board, setBoard] = useState<BoardData | null>(null);
@@ -123,6 +117,34 @@ export default function App() {
     }
   }, []);
 
+  /** 顶部三张卡片：防护道具 / 枪械 / 子弹 里今日变动幅度（绝对值）最大的若干个。 */
+  const loadMovers = useCallback(async () => {
+    try {
+      const groups = await Promise.all(
+        MOVER_CATEGORIES.map(async (category) => {
+          // 分别取涨幅榜与跌幅榜，再按绝对值合并排序——接口不支持按 |涨跌幅| 排序
+          const [up, down] = await Promise.all([
+            api.items({ category: category.key, limit: 20, sort: "bl_today", order: "desc" }),
+            api.items({ category: category.key, limit: 20, sort: "bl_today", order: "asc" }),
+          ]);
+          const seen = new Set<string>();
+          const items = [...up.items, ...down.items]
+            .filter((item) => {
+              if (item.bl_today === null || seen.has(item.item_id)) return false;
+              seen.add(item.item_id);
+              return true;
+            })
+            .sort((a, b) => Math.abs(b.bl_today ?? 0) - Math.abs(a.bl_today ?? 0))
+            .slice(0, MOVER_LIMIT);
+          return { key: category.key, label: category.label, items };
+        }),
+      );
+      setMovers(groups);
+    } catch {
+      setMovers([]);
+    }
+  }, []);
+
   useEffect(() => {
     void refreshOverview();
   }, [refreshOverview]);
@@ -146,32 +168,12 @@ export default function App() {
     if (tab !== "items") return;
     void refreshItems();
     void loadBoard();
-  }, [tab, refreshItems, loadBoard]);
-
-  useEffect(() => {
-    if (selected === null) {
-      setHistory(null);
-      return;
-    }
-    let cancelled = false;
-    setHistoryError(null);
-    api
-      .history(selected.item_id, period)
-      .then((response) => {
-        if (!cancelled) setHistory(response);
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) {
-          setHistory(null);
-          setHistoryError(error instanceof Error ? error.message : String(error));
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selected, period]);
+    void loadMovers();
+  }, [tab, refreshItems, loadBoard, loadMovers]);
 
   const pageCount = Math.max(1, Math.ceil(total / limit));
+  // 右侧主图：点了物品就显示它，否则默认显示今日涨幅榜首（面板始终有内容）
+  const primaryItem = selected ?? board?.gainers[0] ?? null;
 
   const runSync = useCallback(async () => {
     const confirmed = window.confirm(
@@ -222,7 +224,7 @@ export default function App() {
         </div>
       </header>
 
-      <SummaryCards summary={summary} loading={loading} />
+      <SummaryCards summary={summary} loading={loading} movers={movers} />
 
       {tab === "items" && (
         <>
@@ -235,7 +237,7 @@ export default function App() {
             />
           )}
 
-          <div className={`items-layout${selected !== null ? " with-chart" : ""}`}>
+          <div className={`items-layout${primaryItem !== null ? " with-chart" : ""}`}>
           <section className="panel">
             <div className="panel-head">
               <h2>物品行情</h2>
@@ -354,48 +356,14 @@ export default function App() {
             </div>
           </section>
 
-          {selected !== null && (
-            <aside className="panel chart-column">
-              <div className="panel-head">
-                <h2>
-                  历史价格 · {selected.name}
-                  <span className="item-id"> {selected.item_id}</span>
-                </h2>
-                <div className="periods">
-                  {PERIODS.map((option) => (
-                    <button
-                      key={option}
-                      className={option === period ? "chip chip-active" : "chip"}
-                      onClick={() => setPeriod(option)}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                  <button className="chip" onClick={() => setSelected(null)}>
-                    关闭
-                  </button>
-                </div>
-              </div>
-
-              <div className="history-meta">
-                <span>
-                  当前价 <b>{formatNumber(selected.price)}</b>
-                </span>
-                <span className={changeClass(selected.bl_today)}>
-                  今日 {formatPercent(selected.bl_today)}
-                </span>
-                <span className={changeClass(history?.change_pct ?? null)}>
-                  区间 {formatPercent(history?.change_pct ?? null)}
-                </span>
-                <span className="muted">
-                  {history ? `${history.point_count} 个快照` : "—"} · 最近更新{" "}
-                  {formatDateTime(selected.updated_at)}
-                </span>
-                {selected.is_stale && <span className="tag tag-stale">旧价</span>}
-              </div>
-
-              <PriceChart history={history} loading={loading} error={historyError} />
-            </aside>
+          {primaryItem !== null && (
+            <ChartPanel
+              primary={primaryItem}
+              primaryLabel={selected !== null ? "你选中的物品" : "今日涨幅榜首"}
+              secondary={board?.losers[0] ?? null}
+              period={period}
+              onPeriodChange={setPeriod}
+            />
           )}
           </div>
         </>

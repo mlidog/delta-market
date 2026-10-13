@@ -23,7 +23,8 @@ body {
 }
 
 .app {
-  max-width: 1280px;
+  /* 右边常驻曲线栏，宽度放宽一些，避免表格被挤到需要横向滚动 */
+  max-width: 1760px;
   margin: 0 auto;
   padding: 20px 20px 40px;
 }
@@ -525,4 +526,179 @@ button.ghost:disabled {
   color: var(--muted);
   font-size: 12px;
   text-align: center;
+}
+
+/* ---------------- 顶部卡片：今日变动最大 ---------------- */
+
+.mover-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mover-card .card-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mover-tag {
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.mover-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mover-icon {
+  display: block;
+  flex-shrink: 0;
+  border-radius: 6px;
+  object-fit: contain;
+  background: #f2f3f5;
+}
+
+.mover-icon-empty {
+  border: 1px dashed var(--border);
+  background: transparent;
+}
+
+.mover-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.mover-main .item-name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mover-price {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.mover-price span:last-child {
+  font-weight: 600;
+}
+
+.mover-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--border);
+}
+
+.mover-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.mover-list-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mover-list-price {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.mover-list-change {
+  width: 64px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+.mover-toggle {
+  align-self: flex-start;
+}
+
+/* ---------------- 右侧曲线栏 ---------------- */
+
+.chart-column {
+  width: 100%;
+}
+
+.chart-block + .chart-block {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.chart-block-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.chart-block-title {
+  min-width: 0;
+}
+
+.chart-block-title .item-name {
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chart-block-price {
+  flex-shrink: 0;
+  text-align: right;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-block-price span {
+  display: block;
+}
+
+.chart-block-price span:last-child {
+  font-weight: 600;
+}
+
+.chart-block-meta {
+  color: var(--muted);
+  font-size: 11px;
+  margin: 4px 0 6px;
+}
+
+/* 右侧栏里的曲线比大图矮一些，两张图能同时看到 */
+.chart-block .chart {
+  height: 170px;
+}
+
+/* 侧栏占位后表格更窄，缩小字号与内边距，尽量让所有列都露出来 */
+.items-layout.with-chart table {
+  font-size: 12.5px;
+}
+
+.items-layout.with-chart th,
+.items-layout.with-chart td {
+  padding: 6px 8px;
+}
+
+.items-layout.with-chart .col-name {
+  min-width: 170px;
 }

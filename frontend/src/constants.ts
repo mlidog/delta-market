@@ -84,6 +84,16 @@ export const MANUFACTURE_STATIONS = [
 /** 制造排行每页条数。 */
 export const MANUFACTURE_PAGE_SIZE = 5;
 
+/** 顶部卡片关注的三个分类（今日变动最大的物品） */
+export const MOVER_CATEGORIES = [
+  { key: "protect", label: "防护道具" },
+  { key: "gun", label: "枪械" },
+  { key: "ammo", label: "子弹" },
+] as const;
+
+/** 每个分类最多展示多少条 */
+export const MOVER_LIMIT = 10;
+
 /** 与后端 `CHANGE_SORT_FIELDS` 保持一致：这些排序会降权收集品与钥匙卡。 */
 export const CHANGE_SORT_VALUES = new Set([
   "bl_today",
