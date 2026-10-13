@@ -1,6 +1,7 @@
 /** 与后端 `app/api/routes/items.py` 的 SortField 保持一致。 */
 export const SORT_OPTIONS = [
   { value: "bl_today", label: "今日涨跌（平台）" },
+  { value: "price_delta", label: "今日价差（绝对值）" },
   { value: "change_prev_pct", label: "较上次采集" },
   { value: "change_24h_pct", label: "较 24 小时前" },
   { value: "change_7d_pct", label: "较 7 天前" },

@@ -7,14 +7,16 @@ import { changeClass, formatDateTime, formatNumber, formatPercent } from "../uti
 export interface MoverGroup {
   key: string;
   label: string;
+  /** 已按"今日价格差绝对值"从大到小排序 */
   items: ItemPrice[];
 }
 
 interface Props {
   summary: DashboardSummary | null;
   loading: boolean;
-  /** 三个分类的"今日变动最大"列表（已按变动幅度排序） */
   movers: MoverGroup[];
+  /** 点开列表里的物品：跳转到行情表对应位置并显示曲线 */
+  onPick: (item: ItemPrice) => void;
 }
 
 export function statusLabel(status: string): string {
@@ -51,15 +53,22 @@ function ItemIcon({ url, size }: { url: string | null; size: number }) {
   );
 }
 
-function MoverCard({ group }: { group: MoverGroup }) {
+/** 今日价格差：带正负号，和百分比并列展示 */
+function deltaText(item: ItemPrice): string {
+  if (item.price === null || item.price_start === null) return "—";
+  const delta = item.price - item.price_start;
+  return `${delta > 0 ? "+" : ""}${formatNumber(delta)}`;
+}
+
+function MoverCard({ group, onPick }: { group: MoverGroup; onPick: (item: ItemPrice) => void }) {
   const [expanded, setExpanded] = useState(false);
-  const [top, ...rest] = group.items;
+  const [top] = group.items;
 
   return (
-    <div className="card mover-card">
+    <div className={`card mover-card${expanded ? " mover-card-open" : ""}`}>
       <div className="card-label">
         {group.label}
-        <span className="mover-tag">今日变动最大</span>
+        <span className="mover-tag">今日价差最大</span>
       </div>
 
       {top === undefined ? (
@@ -71,33 +80,53 @@ function MoverCard({ group }: { group: MoverGroup }) {
             <div className="mover-main">
               <div className="item-name">{top.name}</div>
               <div className="mover-price">
-                {formatNumber(top.price)}
-                <span className={changeClass(top.bl_today)}>
-                  {formatPercent(top.bl_today)}
+                <span>{formatNumber(top.price)}</span>
+                <span className={changeClass(top.price_delta)}>
+                  {deltaText(top)}
+                  <em className={changeClass(top.bl_today)}>{formatPercent(top.bl_today)}</em>
                 </span>
               </div>
             </div>
           </div>
 
-          {expanded && rest.length > 0 && (
-            <ol className="mover-list">
-              {rest.map((item) => (
-                <li key={item.item_id}>
-                  <ItemIcon url={item.pic_url} size={22} />
-                  <span className="mover-list-name">{item.name}</span>
-                  <span className="mover-list-price">{formatNumber(item.price)}</span>
-                  <span className={`mover-list-change ${changeClass(item.bl_today)}`}>
-                    {formatPercent(item.bl_today)}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
-
           {group.items.length > 1 && (
             <button className="chip mover-toggle" onClick={() => setExpanded((open) => !open)}>
               {expanded ? "收起" : `展开（共 ${group.items.length} 个，最多 ${MOVER_LIMIT}）`}
             </button>
+          )}
+
+          {expanded && (
+            /* 覆盖式列表：绝对定位浮在卡片下方，不撑开卡片、不影响主页面布局 */
+            <div className="mover-overlay">
+              <div className="mover-overlay-head">
+                <span>按今日价差（数值）从大到小</span>
+                <button className="chip" onClick={() => setExpanded(false)}>
+                  关闭
+                </button>
+              </div>
+              <ol className="mover-overlay-list">
+                {group.items.map((item) => (
+                  <li
+                    key={item.item_id}
+                    title="点击跳转到物品行情并显示曲线"
+                    onClick={() => {
+                      setExpanded(false);
+                      onPick(item);
+                    }}
+                  >
+                    <ItemIcon url={item.pic_url} size={24} />
+                    <span className="mover-list-name">{item.name}</span>
+                    <span className="mover-list-price">{formatNumber(item.price)}</span>
+                    <span className={`mover-list-change ${changeClass(item.price_delta)}`}>
+                      {deltaText(item)}
+                    </span>
+                    <span className={`mover-list-change ${changeClass(item.bl_today)}`}>
+                      {formatPercent(item.bl_today)}
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </div>
           )}
         </>
       )}
@@ -105,7 +134,7 @@ function MoverCard({ group }: { group: MoverGroup }) {
   );
 }
 
-export default function SummaryCards({ summary, loading, movers }: Props) {
+export default function SummaryCards({ summary, loading, movers, onPick }: Props) {
   if (loading && summary === null) {
     return (
       <div className="summary-grid">
@@ -138,7 +167,7 @@ export default function SummaryCards({ summary, loading, movers }: Props) {
         </div>
 
         {movers.map((group) => (
-          <MoverCard key={group.key} group={group} />
+          <MoverCard key={group.key} group={group} onPick={onPick} />
         ))}
       </div>
       {(summary.stale_count > 0 || failed) && (

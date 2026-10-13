@@ -172,8 +172,16 @@ def export(session: Session) -> dict[str, int]:
                 "slot_area": area,
                 "price_per_slot": (latest // area) if latest is not None and area else None,
                 "previous_price": change.previous_price if change else None,
+                "previous_price_at": _iso(change.previous_recorded_at) if change else None,
                 "price": latest,
                 "price_start": price_row.price_start if price_row else None,
+                "price_delta": (
+                    abs(latest - price_row.price_start)
+                    if latest is not None
+                    and price_row is not None
+                    and price_row.price_start is not None
+                    else None
+                ),
                 "bl_today": price_row.bl_today if price_row else None,
                 "day_3_bl": price_row.day_3_bl if price_row else None,
                 "day_7_bl": price_row.day_7_bl if price_row else None,

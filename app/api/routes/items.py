@@ -41,6 +41,8 @@ class SortField(StrEnum):
     change_prev_pct = "change_prev_pct"
     change_24h_pct = "change_24h_pct"
     change_7d_pct = "change_7d_pct"
+    #: 今日价格变动的绝对值（数值差距，不是百分比）
+    price_delta = "price_delta"
 
 
 class SortOrder(StrEnum):
@@ -207,8 +209,16 @@ def _to_out(
         slot_area=area,
         price_per_slot=(latest_price // area) if latest_price is not None and area else None,
         previous_price=change.previous_price if change else None,
+        previous_price_at=change.previous_recorded_at if change else None,
         price=latest_price,
         price_start=price.price_start if price else None,
+        price_delta=(
+            abs(latest_price - price.price_start)
+            if latest_price is not None
+            and price is not None
+            and price.price_start is not None
+            else None
+        ),
         bl_today=price.bl_today if price else None,
         day_3_bl=price.day_3_bl if price else None,
         day_7_bl=price.day_7_bl if price else None,

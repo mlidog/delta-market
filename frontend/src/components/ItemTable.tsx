@@ -47,6 +47,7 @@ export default function ItemTable({ items, selectedId, onSelect, loading }: Prop
           {items.map((item) => (
             <tr
               key={item.item_id}
+              id={`item-row-${item.item_id}`}
               className={item.item_id === selectedId ? "selected" : undefined}
               onClick={() => onSelect(item)}
             >
@@ -61,7 +62,12 @@ export default function ItemTable({ items, selectedId, onSelect, loading }: Prop
                 )}
               </td>
               <td className="num">{item.grade ?? "—"}</td>
-              <td className="num muted">{formatNumber(item.previous_price)}</td>
+              <td className="num muted">
+                {formatNumber(item.previous_price)}
+                {item.previous_price_at !== null && (
+                  <span className="collect-time">({formatCollectTime(item.previous_price_at)})</span>
+                )}
+              </td>
               <td className="num strong">
                 {formatNumber(item.price)}
                 {item.updated_at !== null && (

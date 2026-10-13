@@ -34,6 +34,8 @@ class PriceChange:
     price: int | None = None
     #: 上一次采集的价格（展示用；涨跌幅由它和 price 算出）
     previous_price: int | None = None
+    #: 上一次采集的时间（展示用，说明那个价格是什么时候的）
+    previous_recorded_at: datetime | None = None
     change_prev_pct: float | None = None
     change_24h_pct: float | None = None
     change_7d_pct: float | None = None
@@ -64,8 +66,11 @@ def load_price_changes(session: Session) -> dict[str, PriceChange]:
     for item_id, (latest_at, price) in latest.items():
         changes[item_id] = PriceChange(
             price=price,
-            previous_price=previous.get(item_id),
-            change_prev_pct=change_pct(price, previous.get(item_id)),
+            previous_price=previous[item_id][1] if item_id in previous else None,
+            previous_recorded_at=previous[item_id][0] if item_id in previous else None,
+            change_prev_pct=change_pct(
+                price, previous[item_id][1] if item_id in previous else None
+            ),
             # 参考点必须真的早于该物品自己的最新快照，否则说明这物品已经很久没数据了
             change_24h_pct=_reference_change(price, latest_at, ref_24h.get(item_id)),
             change_7d_pct=_reference_change(price, latest_at, ref_7d.get(item_id)),
@@ -86,7 +91,7 @@ def _reference_change(
 
 def _latest_and_previous(
     session: Session,
-) -> tuple[dict[str, tuple[datetime, int]], dict[str, int]]:
+) -> tuple[dict[str, tuple[datetime, int]], dict[str, tuple[datetime, int]]]:
     """用窗口函数一次取出每个物品的最新价与上一次采集价。"""
     ranked = (
         select(
@@ -104,7 +109,7 @@ def _latest_and_previous(
     )
 
     latest: dict[str, tuple[datetime, int]] = {}
-    previous: dict[str, int] = {}
+    previous: dict[str, tuple[datetime, int]] = {}
     for item_id, price, recorded_at, rank in session.execute(
         select(ranked.c.item_id, ranked.c.price, ranked.c.recorded_at, ranked.c.rank).where(
             ranked.c.rank <= 2
@@ -113,7 +118,7 @@ def _latest_and_previous(
         if rank == 1:
             latest[item_id] = (recorded_at, price)
         else:
-            previous[item_id] = price
+            previous[item_id] = (recorded_at, price)
     return latest, previous
 
 

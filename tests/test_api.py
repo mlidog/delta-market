@@ -288,6 +288,7 @@ class TestItemList:
         item = get_items(client, category="gun")["items"][0]
         # 历史快照：[100@-8d, 200@-7d, 400@-30h, 500@-6h, 600@now]
         assert item["previous_price"] == 500
+        assert item["previous_price_at"] == "2026-10-12T10:00:00Z"
         assert item["change_prev_pct"] == pytest.approx(20.0)
         assert item["change_24h_pct"] == pytest.approx(50.0)
         assert item["change_7d_pct"] == pytest.approx(200.0)

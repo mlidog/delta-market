@@ -16,8 +16,10 @@ export interface ItemPrice {
   slot_area: number | null;
   price_per_slot: number | null;
   previous_price: number | null;
+  previous_price_at: string | null;
   price: number | null;
   price_start: number | null;
+  price_delta: number | null;
   bl_today: number | null;
   day_3_bl: number | null;
   day_7_bl: number | null;

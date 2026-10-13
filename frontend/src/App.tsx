@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { IS_STATIC, api } from "./api";
 import type {
@@ -117,26 +117,27 @@ export default function App() {
     }
   }, []);
 
-  /** 顶部三张卡片：防护道具 / 枪械 / 子弹 里今日变动幅度（绝对值）最大的若干个。 */
+  /**
+   * 顶部三张卡片：防护道具 / 枪械 / 子弹 里"今日价差"最大的若干个。
+   *
+   * 价差 = |当前价 − 今日开盘价|，看的是数值差距而不是百分比——
+   * 十几块的子弹涨 30% 也比不上配件涨 3 万。后端 `price_delta` 就是这个值。
+   */
   const loadMovers = useCallback(async () => {
     try {
       const groups = await Promise.all(
         MOVER_CATEGORIES.map(async (category) => {
-          // 分别取涨幅榜与跌幅榜，再按绝对值合并排序——接口不支持按 |涨跌幅| 排序
-          const [up, down] = await Promise.all([
-            api.items({ category: category.key, limit: 20, sort: "bl_today", order: "desc" }),
-            api.items({ category: category.key, limit: 20, sort: "bl_today", order: "asc" }),
-          ]);
-          const seen = new Set<string>();
-          const items = [...up.items, ...down.items]
-            .filter((item) => {
-              if (item.bl_today === null || seen.has(item.item_id)) return false;
-              seen.add(item.item_id);
-              return true;
-            })
-            .sort((a, b) => Math.abs(b.bl_today ?? 0) - Math.abs(a.bl_today ?? 0))
-            .slice(0, MOVER_LIMIT);
-          return { key: category.key, label: category.label, items };
+          const response = await api.items({
+            category: category.key,
+            limit: MOVER_LIMIT,
+            sort: "price_delta",
+            order: "desc",
+          });
+          return {
+            key: category.key,
+            label: category.label,
+            items: response.items.filter((item) => item.price_delta !== null),
+          };
         }),
       );
       setMovers(groups);
@@ -154,6 +155,38 @@ export default function App() {
     setSelected((current) => (current?.item_id === item.item_id ? null : item));
     setPeriod("7d");
   }, []);
+
+  const pendingScrollRef = useRef<string | null>(null);
+
+  /**
+   * 顶部卡片里点某个物品：它可能不在当前页/当前筛选里，
+   * 所以先用精确名称过滤把它带进表格，再滚到那一行并展开曲线。
+   */
+  const handleMoverPick = useCallback((item: ItemPrice) => {
+    setKeyword(item.name);
+    setSearch(item.name);
+    setPage(1);
+    setSelected(item);
+    setPeriod("7d");
+    pendingScrollRef.current = item.item_id;
+  }, []);
+
+  // 等表格真的渲染出那一行再滚动，否则元素还不存在
+  useEffect(() => {
+    const pending = pendingScrollRef.current;
+    if (pending === null) return;
+    const row = document.getElementById(`item-row-${pending}`);
+    if (row !== null) {
+      pendingScrollRef.current = null;
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    // 同名物品太多等原因导致一直找不到时不要无限等，4 秒后放弃，免得之后乱滚
+    const timer = window.setTimeout(() => {
+      pendingScrollRef.current = null;
+    }, 4000);
+    return () => window.clearTimeout(timer);
+  }, [items]);
 
   // 搜索走服务端（覆盖全部物品）。停顿 300ms 再发请求，避免每敲一个字打一次接口。
   useEffect(() => {
@@ -224,7 +257,12 @@ export default function App() {
         </div>
       </header>
 
-      <SummaryCards summary={summary} loading={loading} movers={movers} />
+      <SummaryCards
+        summary={summary}
+        loading={loading}
+        movers={movers}
+        onPick={handleMoverPick}
+      />
 
       {tab === "items" && (
         <>
@@ -360,7 +398,7 @@ export default function App() {
             <ChartPanel
               primary={primaryItem}
               primaryLabel={selected !== null ? "你选中的物品" : "今日涨幅榜首"}
-              secondary={board?.losers[0] ?? null}
+              secondary={selected === null ? (board?.losers[0] ?? null) : null}
               period={period}
               onPeriodChange={setPeriod}
             />

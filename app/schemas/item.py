@@ -29,8 +29,13 @@ class ItemPriceOut(UtcModel):
 
     # --- 价格 ---
     previous_price: int | None = Field(None, description="上一次采集的价格")
+    previous_price_at: UtcDateTime | None = Field(None, description="上一次采集的时间")
     price: int | None = None
     price_start: int | None = Field(None, description="平台口径的今日最初价格")
+    price_delta: int | None = Field(
+        None,
+        description="今日价格变动绝对值 = |当前价 − 今日最初价|，用于按数值差距（而非百分比）排序",
+    )
 
     # --- 平台口径涨跌幅（随全量价格接口免费返回）---
     bl_today: float | None = None

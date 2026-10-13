@@ -531,9 +531,16 @@ button.ghost:disabled {
 /* ---------------- 顶部卡片：今日变动最大 ---------------- */
 
 .mover-card {
+  /* 展开列表是绝对定位的，卡片留作定位参照 */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* 展开时把卡片抬到邻居之上，否则会被下一行的卡片盖住 */
+.mover-card-open {
+  z-index: 30;
 }
 
 .mover-card .card-label {
@@ -591,22 +598,60 @@ button.ghost:disabled {
 
 .mover-price span:last-child {
   font-weight: 600;
+  white-space: nowrap;
 }
 
-.mover-list {
+.mover-price em {
+  margin-left: 6px;
+  font-style: normal;
+  font-weight: 400;
+}
+
+/* 覆盖式展开列表：浮在卡片下方，不占位、不影响主页面布局 */
+.mover-overlay {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  min-width: 300px;
+  padding: 8px 10px 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.18);
+}
+
+.mover-overlay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.mover-overlay-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  border-top: 1px solid var(--border);
+  max-height: 320px;
+  overflow-y: auto;
 }
 
-.mover-list li {
+.mover-overlay-list li {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 4px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 5px 4px;
+  border-top: 1px solid var(--border);
   font-size: 12px;
+  cursor: pointer;
+}
+
+.mover-overlay-list li:hover {
+  background: #f3f6fb;
 }
 
 .mover-list-name {
