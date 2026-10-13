@@ -159,6 +159,31 @@ def publish_site_data(
         return result
     result.committed = True
 
+    # 推送前先把远端拉下来合并：GitHub Actions 偶尔也会提交数据快照，
+    # 两边都改同一批生成出来的 JSON，必然冲突。数据以本机为准（刚导出，最新），
+    # 所以冲突块取本地版本（-X ours）；远端对其它文件的改动照常合并进来。
+    fetch = _git(["fetch", REMOTE, BRANCH], repo_dir=repo_dir)
+    if fetch.returncode == 0:
+        behind = _git(
+            ["rev-list", "--count", f"HEAD..{REMOTE}/{BRANCH}"], repo_dir=repo_dir
+        )
+        try:
+            pending = int((behind.stdout or "0").strip())
+        except ValueError:
+            pending = 0
+        if pending > 0:
+            logger.info("远端有 %d 个本地没有的提交，先合并（数据冲突以本地为准）", pending)
+            merge = _git(
+                ["merge", "--no-edit", "-X", "ours", f"{REMOTE}/{BRANCH}"],
+                repo_dir=repo_dir,
+            )
+            if merge.returncode != 0:
+                # 合并失败就还原现场，本地提交仍然留着，下次再试
+                _git(["merge", "--abort"], repo_dir=repo_dir)
+                result.error = f"合并远端失败：{(merge.stderr or merge.stdout).strip()[:200]}"
+                logger.warning("%s", result.error)
+                return result
+
     push = _git(["push", REMOTE, BRANCH], repo_dir=repo_dir)
     if push.returncode == 0:
         result.pushed = True

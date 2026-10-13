@@ -34,7 +34,8 @@ def git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
 def repo(tmp_path: Path) -> Path:
     """一个带裸远端（bare remote）的临时仓库。"""
     remote = tmp_path / "remote.git"
-    git(tmp_path, "init", "--bare", "--quiet", str(remote))
+    # 显式指定初始分支：否则裸仓库的 HEAD 指向 master，克隆出来会是空工作区
+    git(tmp_path, "init", "--bare", "--quiet", "--initial-branch=main", str(remote))
 
     work = tmp_path / "work"
     work.mkdir()
@@ -113,6 +114,42 @@ class TestPublish:
         monkeypatch.chdir(repo)
         publish_site_data(repo_dir=repo, exporter=writer('{"v":3}'), message="chore: 手工发布")
         assert "手工发布" in git(repo, "log", "--oneline", "-1").stdout
+
+    def test_merges_remote_data_commit_instead_of_conflicting(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """远端（GitHub Actions）也提交了数据时，应自动合并并推送，而不是冲突卡住。"""
+        monkeypatch.chdir(repo)
+        publish_site_data(repo_dir=repo, exporter=writer('{"v":"local-1"}'))
+
+        # 另建一个克隆，模拟 Actions 在远端提交了另一份同名数据文件
+        clone = repo.parent / "clone"
+        git(repo.parent, "clone", "--quiet", str(repo.parent / "remote.git"), str(clone))
+        git(clone, "config", "user.name", "ci")
+        git(clone, "config", "user.email", "ci@example.com")
+        (clone / DATA_PATH / "meta.json").write_text('{"v":"remote"}', encoding="utf-8")
+        git(clone, "add", "-A")
+        git(clone, "commit", "--quiet", "-m", "ci data")
+        git(clone, "push", "--quiet", "origin", "main")
+
+        # 本机再发布：应先把远端提交合并进来，再推送成功
+        result = publish_site_data(repo_dir=repo, exporter=writer('{"v":"local-2"}'))
+
+        assert result.ok, result.error
+        assert result.pushed is True
+        # 冲突的数据文件以本机为准
+        assert (repo / DATA_PATH / "meta.json").read_text(encoding="utf-8") == '{"v":"local-2"}'
+        # 远端的提交也在历史里（没有被丢弃）
+        history = git(repo, "log", "--oneline", "-6").stdout
+        assert "ci data" in history
+
+    def test_no_merge_needed_when_remote_has_nothing_new(
+        self, repo: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(repo)
+        result = publish_site_data(repo_dir=repo, exporter=writer('{"v":"only"}'))
+        assert result.pushed is True
+        assert "Merge" not in git(repo, "log", "--oneline", "-3").stdout
 
 
 class TestSystemProxy:
