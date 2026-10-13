@@ -60,6 +60,17 @@ function deltaText(item: ItemPrice): string {
   return `${delta > 0 ? "+" : ""}${formatNumber(delta)}`;
 }
 
+/**
+ * 价差的颜色按**带符号的差值**判断：涨红、跌绿。
+ *
+ * 不能直接用接口的 `price_delta`——那是绝对值（排序用），永远是正数，
+ * 会导致跌得最狠的物品也显示成红色。
+ */
+function deltaClass(item: ItemPrice): string {
+  if (item.price === null || item.price_start === null) return "muted";
+  return changeClass(item.price - item.price_start);
+}
+
 function MoverCard({ group, onPick }: { group: MoverGroup; onPick: (item: ItemPrice) => void }) {
   const [expanded, setExpanded] = useState(false);
   const [top] = group.items;
@@ -81,7 +92,7 @@ function MoverCard({ group, onPick }: { group: MoverGroup; onPick: (item: ItemPr
               <div className="item-name">{top.name}</div>
               <div className="mover-price">
                 <span>{formatNumber(top.price)}</span>
-                <span className={changeClass(top.price_delta)}>
+                <span className={deltaClass(top)}>
                   {deltaText(top)}
                   <em className={changeClass(top.bl_today)}>{formatPercent(top.bl_today)}</em>
                 </span>
@@ -117,7 +128,7 @@ function MoverCard({ group, onPick }: { group: MoverGroup; onPick: (item: ItemPr
                     <ItemIcon url={item.pic_url} size={24} />
                     <span className="mover-list-name">{item.name}</span>
                     <span className="mover-list-price">{formatNumber(item.price)}</span>
-                    <span className={`mover-list-change ${changeClass(item.price_delta)}`}>
+                    <span className={`mover-list-change ${deltaClass(item)}`}>
                       {deltaText(item)}
                     </span>
                     <span className={`mover-list-change ${changeClass(item.bl_today)}`}>
