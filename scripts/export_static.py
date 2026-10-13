@@ -300,26 +300,40 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    export_site(collect_data=not args.no_collect)
+    print(f"   输出目录：{DATA_DIR}")
+    return 0
+
+
+def export_site(*, collect_data: bool = True, verbose: bool = True) -> dict[str, int]:
+    """导出静态数据；后端调度器与命令行共用这个入口。
+
+    Args:
+        collect_data: 是否先联网采集（False 表示只用现有数据库重新导出）
+        verbose: 是否打印过程
+    """
     init_db()
     session = SessionLocal()
     try:
         seeded_items, seeded_snapshots = seed_from_previous_export(session)
-        print(f"1) 用上次导出预热：物品 {seeded_items} 个，历史快照 {seeded_snapshots} 条")
+        if verbose:
+            print(f"1) 用上次导出预热：物品 {seeded_items} 个，历史快照 {seeded_snapshots} 条")
 
-        if args.no_collect:
-            print("2) 已跳过采集（--no-collect）")
-        else:
-            print("2) 采集与同步…")
+        if collect_data:
+            if verbose:
+                print("2) 采集与同步…")
             collect(session)
+        elif verbose:
+            print("2) 已跳过采集")
 
         sizes = export(session)
-        print("3) 导出完成：")
-        for name, size in sizes.items():
-            print(f"   {name:<18} {size / 1024:8.1f} KB")
-        print(f"   输出目录：{DATA_DIR}")
+        if verbose:
+            print("3) 导出完成：")
+            for name, size in sizes.items():
+                print(f"   {name:<18} {size / 1024:8.1f} KB")
+        return sizes
     finally:
         session.close()
-    return 0
 
 
 if __name__ == "__main__":

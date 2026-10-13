@@ -22,14 +22,13 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from app.config import Settings, get_settings
-from app.services import Collector, CollectResult
+from app.services import Collector, CollectResult, publish_site_data
 from app.services.manufacture import ManufactureSyncResult, sync_manufacture
 
 logger = logging.getLogger(__name__)
 
 COLLECT_JOB_ID = "collect-prices"
 STARTUP_JOB_ID = "collect-prices-on-startup"
-MANUFACTURE_JOB_ID = "sync-manufacture"
 
 #: 错过触发后的补跑宽限期（秒）
 MISFIRE_GRACE_SECONDS = 3600
@@ -101,6 +100,30 @@ def run_manufacture_sync() -> ManufactureSyncResult | None:
     return result
 
 
+def run_pipeline() -> None:
+    """一轮完整的例行任务：采集价格 → 同步制造收益 → 导出并发布静态站。
+
+    三步串在一个任务里，而不是拆成三个 job，是为了保证顺序：
+    导出必须发生在采集和同步之后，发布又要发生在导出之后。
+    """
+    collect_result = run_collect_once()
+    run_manufacture_sync()
+    published = publish_site_data()
+
+    if published.skipped:
+        logger.info("未配置远端仓库，跳过发布静态数据")
+    elif published.ok:
+        logger.info(
+            "静态数据已发布：提交=%s 推送=%s%s 采集=%s",
+            published.committed,
+            published.pushed,
+            "（走系统代理）" if published.used_proxy else "",
+            collect_result.status.value if collect_result else "unknown",
+        )
+    else:
+        logger.warning("静态数据发布失败：%s", published.error)
+
+
 def build_cron_trigger(settings: Settings | None = None) -> CronTrigger:
     """构造每日固定时刻触发的 Cron 触发器。"""
     config = settings or get_settings()
@@ -114,7 +137,7 @@ def build_cron_trigger(settings: Settings | None = None) -> CronTrigger:
 def create_scheduler(
     settings: Settings | None = None,
     *,
-    job=run_collect_once,
+    job=run_pipeline,
     now: datetime | None = None,
 ) -> BackgroundScheduler:
     """创建（但尚未启动）采集调度器。"""
@@ -126,18 +149,7 @@ def create_scheduler(
         job,
         trigger=build_cron_trigger(config),
         id=COLLECT_JOB_ID,
-        name="采集交易行价格",
-        replace_existing=True,
-        max_instances=1,
-        coalesce=True,
-        misfire_grace_time=MISFIRE_GRACE_SECONDS,
-    )
-
-    scheduler.add_job(
-        run_manufacture_sync,
-        trigger=build_cron_trigger(config),
-        id=MANUFACTURE_JOB_ID,
-        name="同步特勤处制造收益",
+        name="采集并发布行情数据",
         replace_existing=True,
         max_instances=1,
         coalesce=True,
@@ -150,7 +162,7 @@ def create_scheduler(
             trigger="date",
             run_date=now or datetime.now(timezone),
             id=STARTUP_JOB_ID,
-            name="启动补采",
+            name="启动补采并发布",
             replace_existing=True,
             max_instances=1,
         )

@@ -45,6 +45,8 @@ class Settings(BaseSettings):
 
     # --- 采集 ---
     collector_timezone: str = "Asia/Shanghai"
+    #: 采集完成后是否把静态数据推送到 GitHub（Pages 的数据来源）
+    publisher_enabled: bool = True
     #: 是否在本进程内启动定时采集。多 worker 部署时应只让一个进程开启，
     #: 或干脆关闭、由外部调度器调用采集命令。
     scheduler_enabled: bool = True
