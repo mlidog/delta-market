@@ -83,6 +83,34 @@ def system_proxy() -> str | None:
     return text if text.startswith("http") else f"http://{text}"
 
 
+def _sync_with_remote(repo_dir: Path | None) -> str | None:
+    """把远端比本地新的提交合并进来（数据文件冲突以本地为准）。返回错误信息。
+
+    拉取失败时返回 None 而不是报错：网络不通时先让推送去试，
+    推送被拒（说明远端确实更新了）时会再调一次这个函数。
+    """
+    fetch = _git(["fetch", REMOTE, BRANCH], repo_dir=repo_dir)
+    if fetch.returncode != 0:
+        return None
+
+    behind = _git(["rev-list", "--count", f"HEAD..{REMOTE}/{BRANCH}"], repo_dir=repo_dir)
+    try:
+        pending = int((behind.stdout or "0").strip())
+    except ValueError:
+        pending = 0
+    if pending <= 0:
+        return None
+
+    logger.info("远端有 %d 个本地没有的提交，先合并（数据冲突以本地为准）", pending)
+    merge = _git(
+        ["merge", "--no-edit", "-X", "ours", f"{REMOTE}/{BRANCH}"], repo_dir=repo_dir
+    )
+    if merge.returncode != 0:
+        _git(["merge", "--abort"], repo_dir=repo_dir)
+        return f"合并远端失败：{(merge.stderr or merge.stdout).strip()[:200]}"
+    return None
+
+
 def _git(
     args: list[str],
     *,
@@ -162,32 +190,27 @@ def publish_site_data(
     # 推送前先把远端拉下来合并：GitHub Actions 偶尔也会提交数据快照，
     # 两边都改同一批生成出来的 JSON，必然冲突。数据以本机为准（刚导出，最新），
     # 所以冲突块取本地版本（-X ours）；远端对其它文件的改动照常合并进来。
-    fetch = _git(["fetch", REMOTE, BRANCH], repo_dir=repo_dir)
-    if fetch.returncode == 0:
-        behind = _git(
-            ["rev-list", "--count", f"HEAD..{REMOTE}/{BRANCH}"], repo_dir=repo_dir
-        )
-        try:
-            pending = int((behind.stdout or "0").strip())
-        except ValueError:
-            pending = 0
-        if pending > 0:
-            logger.info("远端有 %d 个本地没有的提交，先合并（数据冲突以本地为准）", pending)
-            merge = _git(
-                ["merge", "--no-edit", "-X", "ours", f"{REMOTE}/{BRANCH}"],
-                repo_dir=repo_dir,
-            )
-            if merge.returncode != 0:
-                # 合并失败就还原现场，本地提交仍然留着，下次再试
-                _git(["merge", "--abort"], repo_dir=repo_dir)
-                result.error = f"合并远端失败：{(merge.stderr or merge.stdout).strip()[:200]}"
-                logger.warning("%s", result.error)
-                return result
+    sync_error = _sync_with_remote(repo_dir)
+    if sync_error:
+        result.error = sync_error
+        logger.warning("%s", result.error)
+        return result
 
     push = _git(["push", REMOTE, BRANCH], repo_dir=repo_dir)
     if push.returncode == 0:
         result.pushed = True
         return result
+
+    # 被拒通常意味着"远端在刚才这几秒里又前进了"（对手提交了数据快照），
+    # 重新同步一次就能推上去；不行再去折腾代理。
+    if "fetch first" in (push.stderr or "") or "non-fast-forward" in (push.stderr or ""):
+        logger.info("推送被拒（远端有更新），重新同步后再试")
+        if _sync_with_remote(repo_dir) is None:
+            retry_push = _git(["push", REMOTE, BRANCH], repo_dir=repo_dir)
+            if retry_push.returncode == 0:
+                result.pushed = True
+                return result
+            push = retry_push
 
     proxy = system_proxy()
     if proxy is None:
