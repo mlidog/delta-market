@@ -15,7 +15,9 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: false
+  # 改成 true：万一某个任务卡在排队（等待 Pages 环境等），新任务会把它替换掉，
+  # 而不是一直在队列里干等。官方示例用 false，但那会让一个卡住的任务堵掉后续所有部署。
+  cancel-in-progress: true
 
 jobs:
   update-and-deploy:

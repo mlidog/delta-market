@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -31,6 +32,12 @@ from app.data_sources.base import (
     ManufactureRecord,
     PriceRecord,
 )
+
+# 数据帝的 Token 只能用查询串传（`?token=...`），而 httpx 默认会把**完整 URL**
+# 记进 INFO 日志——密钥就会明文写进日志文件或控制台。
+# 在这里（唯一发起请求的模块）压掉，服务进程、命令行脚本、定时任务全都覆盖到。
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 DEFAULT_BASE_URL = "https://orzice.com/workApi"
 USER_AGENT = "DeltaForceApi/1.0"
