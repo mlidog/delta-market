@@ -96,6 +96,33 @@ export const MOVER_CATEGORIES = [
 /** 每个分类最多展示多少条 */
 export const MOVER_LIMIT = 10;
 
+/**
+ * 顶部卡片的**取数条数**：要多取一些，因为下面会过滤掉耐久细分项，
+ * 过滤后仍要凑满 MOVER_LIMIT 条。
+ */
+export const MOVER_FETCH_LIMIT = 40;
+
+/**
+ * 顶部卡片里"只保留本体"的装备名。
+ *
+ * 同一件防具在交易行里有 本体 / (几乎全新) / (破损) 等多个条目，
+ * 它们会一口气占掉防护道具卡片的前几名（H70 精英头盔、HA-2重型防弹衣 就是这种），
+ * 所以这里按前缀挡掉细分项，只留本体。
+ *
+ * 想彻底屏蔽某件装备（连本体也不显示），把它写全并且不要再加进这个列表，
+ * 而是直接用 EXCLUDED_MOVER_NAMES。
+ */
+export const MOVER_VARIANT_BASES = ["H70 精英头盔", "HA-2重型防弹衣"] as const;
+
+/** 顶部卡片里完全不显示的物品名（本体也不显示）。 */
+export const EXCLUDED_MOVER_NAMES: readonly string[] = [];
+
+export function isExcludedMoverName(name: string): boolean {
+  if (EXCLUDED_MOVER_NAMES.includes(name)) return true;
+  // 前缀命中且名字更长 = 耐久细分项，例如 "H70 精英头盔 (破损)"
+  return MOVER_VARIANT_BASES.some((base) => name !== base && name.startsWith(base));
+}
+
 /** 与后端 `CHANGE_SORT_FIELDS` 保持一致：这些排序会降权收集品与钥匙卡。 */
 export const CHANGE_SORT_VALUES = new Set([
   "bl_today",

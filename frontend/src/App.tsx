@@ -15,12 +15,14 @@ import SummaryCards, { statusLabel, type MoverGroup } from "./components/Summary
 import {
   CATEGORY_OPTIONS,
   CHANGE_SORT_VALUES,
+  MOVER_FETCH_LIMIT,
   MANUFACTURE_STATIONS,
   MOVER_CATEGORIES,
   MOVER_LIMIT,
   PAGE_SIZES,
   SORT_OPTIONS,
   categoryQuery,
+  isExcludedMoverName,
 } from "./constants";
 import { formatClock, formatDateTime } from "./utils/format";
 
@@ -130,14 +132,17 @@ export default function App() {
         MOVER_CATEGORIES.map(async (category) => {
           const response = await api.items({
             category: category.key,
-            limit: MOVER_LIMIT,
+            // 多取一些：下面要挡掉耐久细分项，过滤后仍需凑满 MOVER_LIMIT 条
+            limit: MOVER_FETCH_LIMIT,
             sort: "day_spread",
             order: "desc",
           });
           return {
             key: category.key,
             label: category.label,
-            items: response.items.filter((item) => item.day_spread !== null),
+            items: response.items
+              .filter((item) => item.day_spread !== null && !isExcludedMoverName(item.name))
+              .slice(0, MOVER_LIMIT),
           };
         }),
       );
