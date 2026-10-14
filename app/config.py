@@ -56,12 +56,6 @@ class Settings(BaseSettings):
     )
     collector_retry_times: int = 3
     collector_run_on_startup: bool = True
-    #: 启动补采的最小间隔（小时）。最近一条快照比这更新就跳过启动补采：
-    #: 无条件补采的代价是每重启一次就多花一轮平台额度（20 次物品采集 +
-    #: 12 次制造查询），并在 `price_history` 里留下一个和上一轮只差几分钟的
-    #: 重复快照，让"较上次采集"永远看起来没有变化。
-    #: 设为 0 表示不做判断，每次启动都补采。
-    collector_startup_min_interval_hours: float = Field(default=12.0, ge=0)
     #: 物品基础信息的刷新间隔（天）。`item_info_all` 与 `item_price_all` 各消耗
     #: 20 次资源，而名称/分类/格数几乎不变，所以默认一周拉一次即可；
     #: 设为 0 表示每轮都刷新。

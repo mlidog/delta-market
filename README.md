@@ -45,9 +45,8 @@ pytest
 
 应用启动后会拉起调度器，按 `COLLECTOR_CRON_HOURS`（默认北京时间 0 / 16 / 22 点）自动采集。
 
-- `COLLECTOR_RUN_ON_STARTUP=true` 时启动后会补采一次，避免看板为空；
-  但最近一条快照距今不足 `COLLECTOR_STARTUP_MIN_INTERVAL_HOURS`（默认 12 小时）时跳过——
-  否则每次重启都白花一轮额度，还会留下和上一轮只差几分钟的重复快照
+- `COLLECTOR_RUN_ON_STARTUP=false`（本项目当前设置）：启动**不再**补采，采集只由 0/16/22 三个档位驱动。
+  这样改代码重启只加载代码，不会白花一轮平台额度。设 `true` 可恢复"启动即补采"
 - `SCHEDULER_ENABLED=false` 可整体关闭本进程的定时采集
 - `/health` 的 `next_collect_at` 字段能看到下一次采集时间
 
@@ -74,8 +73,9 @@ UTC 值（例如 14:00Z 对应北京时间 22:00）。
 
 ## 启动与接口
 
-> 想让看板跑在 GitHub 上、不依赖自己的电脑？见
-> [docs/deploy-github-pages.md](docs/deploy-github-pages.md)（Actions 定时采集 + 静态数据 + Pages）。
+> 线上 Pages 站点的部署流程见 [docs/deploy-github-pages.md](docs/deploy-github-pages.md)。
+> 注意：该方案用的 Actions workflow 已于 2026-10-14 移除，线上站点当前不再自动更新，
+> 文档里保留了完整的恢复步骤。
 
 ```powershell
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
