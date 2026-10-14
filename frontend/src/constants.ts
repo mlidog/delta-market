@@ -97,30 +97,23 @@ export const MOVER_CATEGORIES = [
 export const MOVER_LIMIT = 10;
 
 /**
- * 顶部卡片的**取数条数**：要多取一些，因为下面会过滤掉耐久细分项，
+ * 顶部卡片的**取数条数**：要多取一些——下面会剔除 H70 / HA-2 整族（每族 3 个变体），
  * 过滤后仍要凑满 MOVER_LIMIT 条。
  */
 export const MOVER_FETCH_LIMIT = 40;
 
 /**
- * 顶部卡片里"只保留本体"的装备名。
+ * 顶部卡片里完全屏蔽的装备名（**本体和所有耐久细分项都不显示**）。
  *
  * 同一件防具在交易行里有 本体 / (几乎全新) / (破损) 等多个条目，
  * 它们会一口气占掉防护道具卡片的前几名（H70 精英头盔、HA-2重型防弹衣 就是这种），
- * 所以这里按前缀挡掉细分项，只留本体。
- *
- * 想彻底屏蔽某件装备（连本体也不显示），把它写全并且不要再加进这个列表，
- * 而是直接用 EXCLUDED_MOVER_NAMES。
+ * 所以按前缀把整族（含本体）都挡掉，让卡片显示其它物品。
+ * 只影响顶部卡片，物品行情表里照常显示它们。
  */
-export const MOVER_VARIANT_BASES = ["H70 精英头盔", "HA-2重型防弹衣"] as const;
-
-/** 顶部卡片里完全不显示的物品名（本体也不显示）。 */
-export const EXCLUDED_MOVER_NAMES: readonly string[] = [];
+export const EXCLUDED_MOVER_PREFIXES = ["H70 精英头盔", "HA-2重型防弹衣"] as const;
 
 export function isExcludedMoverName(name: string): boolean {
-  if (EXCLUDED_MOVER_NAMES.includes(name)) return true;
-  // 前缀命中且名字更长 = 耐久细分项，例如 "H70 精英头盔 (破损)"
-  return MOVER_VARIANT_BASES.some((base) => name !== base && name.startsWith(base));
+  return EXCLUDED_MOVER_PREFIXES.some((prefix) => name.startsWith(prefix));
 }
 
 /** 与后端 `CHANGE_SORT_FIELDS` 保持一致：这些排序会降权收集品与钥匙卡。 */
