@@ -531,3 +531,98 @@ class TestDashboardSummary:
         body = client.get("/api/dashboard/summary").json()
         assert body["priced_count"] == 2
         assert body["rising_count"] == 1
+
+
+class TestDaySpread:
+    """「当天最高价 − 补货价」：接口字段与排序。"""
+
+    def test_exposes_restock_price_and_day_high(self, client, session) -> None:
+        from app.schemas.common import to_utc_iso
+        from app.services.pricing import beijing_day_start
+
+        day_start = beijing_day_start()
+        high_at = day_start + timedelta(hours=13)
+        session.add(Item(item_id="910001", name="今日物品", primary_class="gun"))
+        session.add(
+            CurrentPrice(
+                item_id="910001",
+                price=130,
+                price_start=80,
+                bl_today=62.5,
+                source="mock",
+                status=PriceStatus.OK.value,
+                updated_at=day_start,
+            )
+        )
+        # 0 点补货价 80 → 当天最高 130（几个小时之后）
+        session.add(PriceHistory(item_id="910001", price=80, recorded_at=day_start))
+        session.add(
+            PriceHistory(
+                item_id="910001",
+                price=130,
+                recorded_at=day_start + timedelta(hours=13),
+            )
+        )
+        session.commit()
+
+        body = get_items(client, sort="day_spread", order="desc")
+        row = body["items"][0]
+        assert row["restock_price"] == 80
+        assert row["restock_at"] == to_utc_iso(day_start)
+        assert row["day_high"] == 130
+        assert row["day_high_at"] == to_utc_iso(high_at)
+        assert row["day_spread"] == 50
+        # 补货时刻必须落在北京时间 0 点（UTC 前一天 16:00）
+        assert (day_start + timedelta(hours=8)).hour == 0
+
+    def test_items_without_today_data_sort_last(self, client, session) -> None:
+        from app.services.pricing import beijing_day_start
+
+        day_start = beijing_day_start()
+        session.add_all(
+            [
+                Item(item_id="910001", name="今日物品", primary_class="gun"),
+                Item(item_id="910002", name="历史物品", primary_class="gun"),
+            ]
+        )
+        session.add(
+            CurrentPrice(
+                item_id="910001",
+                price=130,
+                price_start=80,
+                source="mock",
+                status=PriceStatus.OK.value,
+                updated_at=day_start,
+            )
+        )
+        session.add(
+            CurrentPrice(
+                item_id="910002",
+                price=9999,
+                price_start=1,
+                source="mock",
+                status=PriceStatus.OK.value,
+                updated_at=day_start,
+            )
+        )
+        session.add(PriceHistory(item_id="910001", price=80, recorded_at=day_start))
+        session.add(
+            PriceHistory(
+                item_id="910001",
+                price=130,
+                recorded_at=day_start + timedelta(hours=13),
+            )
+        )
+        # 只有昨天的快照：价差是 null，即使它的价格绝对值更大也排最后
+        session.add(
+            PriceHistory(
+                item_id="910002",
+                price=9999,
+                recorded_at=day_start - timedelta(hours=6),
+            )
+        )
+        session.commit()
+
+        rows = get_items(client, sort="day_spread", order="desc")["items"]
+        assert [row["item_id"] for row in rows] == ["910001", "910002"]
+        assert rows[1]["day_spread"] is None

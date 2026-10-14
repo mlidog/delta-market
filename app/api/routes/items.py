@@ -13,7 +13,13 @@ from app.config import get_settings
 from app.database import get_db
 from app.models import CurrentPrice, Item, PriceHistory
 from app.schemas import ItemHistoryOut, ItemListOut, ItemPriceOut, PricePointOut
-from app.services.pricing import PriceChange, change_pct, load_price_changes
+from app.services.pricing import (
+    DayStats,
+    PriceChange,
+    change_pct,
+    load_day_stats,
+    load_price_changes,
+)
 from app.utils import utcnow
 
 router = APIRouter(tags=["items"])
@@ -43,6 +49,8 @@ class SortField(StrEnum):
     change_7d_pct = "change_7d_pct"
     #: 今日价格变动的绝对值（数值差距，不是百分比）
     price_delta = "price_delta"
+    #: 当天最高价与补货价的价差（看"抢补货"机会）
+    day_spread = "day_spread"
 
 
 class SortOrder(StrEnum):
@@ -120,8 +128,9 @@ def list_items(
         statement = statement.where(Item.is_tradable.is_(tradable))
 
     changes = load_price_changes(db)
+    day_stats = load_day_stats(db)
     rows = [
-        _to_out(item, price, changes.get(item.item_id))
+        _to_out(item, price, changes.get(item.item_id), day_stats.get(item.item_id))
         for item, price in db.execute(statement)
     ]
     _sort_rows(rows, sort, order)
@@ -184,7 +193,10 @@ def item_history(
 # 内部辅助
 # --------------------------------------------------------------------------- #
 def _to_out(
-    item: Item, price: CurrentPrice | None, change: PriceChange | None
+    item: Item,
+    price: CurrentPrice | None,
+    change: PriceChange | None,
+    day: DayStats | None,
 ) -> ItemPriceOut:
     latest_price = None
     if price is not None:
@@ -219,6 +231,11 @@ def _to_out(
             and price.price_start is not None
             else None
         ),
+        restock_price=day.restock_price if day else None,
+        restock_at=day.restock_at if day else None,
+        day_high=day.day_high if day else None,
+        day_high_at=day.day_high_at if day else None,
+        day_spread=day.spread if day else None,
         bl_today=price.bl_today if price else None,
         day_3_bl=price.day_3_bl if price else None,
         day_7_bl=price.day_7_bl if price else None,

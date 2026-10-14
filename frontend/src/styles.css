@@ -607,6 +607,61 @@ button.ghost:disabled {
   font-weight: 400;
 }
 
+/* 价差（当天最高价 − 补货价）：卡片的主角 */
+.mover-spread {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.mover-spread-value {
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.mover-spread em {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* 补货价 / 最高价两行，每行都带采样时刻 */
+.mover-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.mover-line {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.mover-line-label {
+  color: var(--muted);
+}
+
+.mover-line b {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mover-line i {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--muted);
+}
+
 /* 覆盖式展开列表：浮在卡片下方，不占位、不影响主页面布局 */
 .mover-overlay {
   position: absolute;
@@ -614,7 +669,7 @@ button.ghost:disabled {
   left: 0;
   right: 0;
   z-index: 40;
-  min-width: 300px;
+  min-width: 340px;
   padding: 8px 10px 4px;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -663,15 +718,26 @@ button.ghost:disabled {
 }
 
 .mover-list-price {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  flex-shrink: 0;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mover-list-price i {
+  margin-left: 3px;
+  font-style: normal;
+  font-size: 10px;
 }
 
 .mover-list-change {
-  width: 64px;
+  width: 78px;
   text-align: right;
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .mover-toggle {

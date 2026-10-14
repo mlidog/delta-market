@@ -37,7 +37,7 @@ from app.database import SessionLocal, init_db
 from app.models import CollectRun, CurrentPrice, Item, ManufactureProfit, PriceHistory, PriceStatus
 from app.services import Collector
 from app.services.manufacture import sync_manufacture
-from app.services.pricing import load_price_changes
+from app.services.pricing import load_day_stats, load_price_changes
 from app.utils import utcnow
 
 DATA_DIR = BASE_DIR / "frontend" / "public" / "data"
@@ -148,6 +148,7 @@ def export(session: Session) -> dict[str, int]:
     settings = get_settings()
     active_source = settings.data_source
     changes = load_price_changes(session)
+    day_stats = load_day_stats(session)
 
     items: list[dict[str, Any]] = []
     rows = session.execute(select(Item, CurrentPrice).join(
@@ -155,6 +156,7 @@ def export(session: Session) -> dict[str, int]:
     ).where(CurrentPrice.source == active_source)).all()
     for item_row, price_row in rows:
         change = changes.get(item_row.item_id)
+        day = day_stats.get(item_row.item_id)
         area = item_row.slot_area
         latest = price_row.price if price_row else (change.price if change else None)
         items.append(
@@ -182,6 +184,12 @@ def export(session: Session) -> dict[str, int]:
                     and price_row.price_start is not None
                     else None
                 ),
+                # 当天（北京时间）的补货价与最高价：0 点那条快照 = 补货后价格
+                "restock_price": day.restock_price if day else None,
+                "restock_at": _iso(day.restock_at) if day else None,
+                "day_high": day.day_high if day else None,
+                "day_high_at": _iso(day.day_high_at) if day else None,
+                "day_spread": day.spread if day else None,
                 "bl_today": price_row.bl_today if price_row else None,
                 "day_3_bl": price_row.day_3_bl if price_row else None,
                 "day_7_bl": price_row.day_7_bl if price_row else None,

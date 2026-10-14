@@ -118,10 +118,11 @@ export default function App() {
   }, []);
 
   /**
-   * 顶部三张卡片：防护道具 / 枪械 / 子弹 里"今日价差"最大的若干个。
+   * 顶部三张卡片：防护道具 / 枪械 / 子弹 里"当天最高价与补货价的价差"最大的若干个。
    *
-   * 价差 = |当前价 − 今日开盘价|，看的是数值差距而不是百分比——
-   * 十几块的子弹涨 30% 也比不上配件涨 3 万。后端 `price_delta` 就是这个值。
+   * 价差 = 当天最高价 − 补货价（补货价 = 0 点补货后第一条快照的价格）。
+   * 这个口径直接对应"0 点补货时抢到、当天高点卖出能赚多少"，
+   * 比百分比或开盘价差更贴近实际收益。
    */
   const loadMovers = useCallback(async () => {
     try {
@@ -130,13 +131,13 @@ export default function App() {
           const response = await api.items({
             category: category.key,
             limit: MOVER_LIMIT,
-            sort: "price_delta",
+            sort: "day_spread",
             order: "desc",
           });
           return {
             key: category.key,
             label: category.label,
-            items: response.items.filter((item) => item.price_delta !== null),
+            items: response.items.filter((item) => item.day_spread !== null),
           };
         }),
       );

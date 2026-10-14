@@ -20,6 +20,13 @@ export interface ItemPrice {
   price: number | null;
   price_start: number | null;
   price_delta: number | null;
+  /** 补货价 = 当天 0 点补货后第一条快照的价格 */
+  restock_price: number | null;
+  restock_at: string | null;
+  day_high: number | null;
+  day_high_at: string | null;
+  /** 价差 = 当天最高价 − 补货价 */
+  day_spread: number | null;
   bl_today: number | null;
   day_3_bl: number | null;
   day_7_bl: number | null;

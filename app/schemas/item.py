@@ -37,6 +37,17 @@ class ItemPriceOut(UtcModel):
         description="今日价格变动绝对值 = |当前价 − 今日最初价|，用于按数值差距（而非百分比）排序",
     )
 
+    # --- 当天（北京时间自然日）的补货价与最高价 ---
+    restock_price: int | None = Field(
+        None, description="补货价 = 当天 0 点补货后第一条快照的价格"
+    )
+    restock_at: UtcDateTime | None = Field(None, description="补货价那条快照的时间")
+    day_high: int | None = Field(None, description="当天快照里的最高价")
+    day_high_at: UtcDateTime | None = Field(None, description="当天最高价出现的时间")
+    day_spread: int | None = Field(
+        None, description="价差 = 当天最高价 − 补货价（按此排序即为「最高价与补货价差距」榜）"
+    )
+
     # --- 平台口径涨跌幅（随全量价格接口免费返回）---
     bl_today: float | None = None
     day_3_bl: float | None = None
