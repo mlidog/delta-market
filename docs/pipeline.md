@@ -2,17 +2,16 @@
 
 ## 一、发布路径
 
-| 路径 | 触发方式 | 数据新鲜度 | 前提 |
+| 环节 | 谁来做 | 触发方式 | 说明 |
 | --- | --- | --- | --- |
-| **本机** | 本机后端每天 0/16/22 点调度 | 准时 | 本机能访问 GitHub |
-| ~~GitHub Actions~~ | 已于 2026-10-14 移除 | — | — |
+| **采集 + 导出** | 本机后端 | 每天 0/16/22 点调度 | 唯一的采集来源，额度只在这里花 |
+| **构建 + 部署** | GitHub Actions | 本机 push 后自动触发 | `.github/workflows/pages.yml`，只构建部署、不采集 |
 
-现在只有本机一条路径：本机后端每天 0/16/22 点采集 → 导出 JSON → 提交推送到 GitHub。
+一条链路：本机采集 → 导出 JSON → 提交推送 → Actions 重建并发布 Pages。
 
-> **为什么移除 Actions**：GitHub 自己的 cron 不保证准时（实测晚 5~6.7 小时），
-> 而且它每次触发都会真采一轮（32 次资源），和本机采集重复烧额度。
-> 移除后线上 Pages 站点**不再自动重建**（部署也走这个 workflow），
-> 需要恢复时：`git checkout 37457f3 -- .github/workflows/pages.yml`。
+> **为什么把 Actions 的"采集"去掉**：GitHub 自己的 cron 不保证准时（实测迟到 4 小时 55 分 ~ 6 小时 40 分），
+> 而且每次定时触发都会真采一轮（32 次资源），与本机采集重复烧额度。
+> 现在 workflow 只保留 push 触发的构建部署，整条链路不花一分额度、也不会重复采集。
 
 ## 二、本机路径逐步拆解
 
@@ -68,7 +67,7 @@
 ### 第 4 步：提交并推送（`app/services/publisher.py`）
 
 1. `git add frontend/public/data` → 没有变化就跳过（不产生空提交）
-2. `git commit -m "chore: 更新数据快照 [skip ci]"`
+2. `git commit -m "chore: 更新数据快照"`（**不带 `[skip ci]`**：带了 GitHub 会跳过这次推送，网页就不重建了）
 3. `git push origin main`：**先直连**；失败则读系统代理（环境变量 → 注册表 `ProxyEnable`/`ProxyServer`）
    用 `-c http.proxy=...` 重试
 4. 推送失败不影响采集：本地提交保留，**下一次成功推送时会一并带上**（自愈）
@@ -76,22 +75,22 @@
 > 为什么需要代理这一步：国内直连 `github.com:443` 经常不通，而 **git 默认不使用 Windows 系统代理**
 > （只有浏览器 / .NET 会用），所以必须手动传给 git。
 
-### 第 5 步：推送（原本由 Actions 构建部署，现已移除）
+### 第 5 步：推送触发 GitHub Pages 部署
 
-- 现在推送只把代码与 JSON 快照存到仓库，不再触发任何构建
-- 线上 Pages 站点保持在最后一次部署的版本，本机更新不会反映到线上
-- 前端静态版想本地看：`cd frontend; $env:VITE_STATIC="true"; npm run build; npm run preview`
+1. `git push`（提交信息是 `chore: 更新数据快照`，**故意不带 `[skip ci]`**——
+   带了的话 GitHub 会跳过整次推送，站点就停在旧数据上）
+2. Actions 收到 push 事件 → `npm ci` → `VITE_STATIC=true npm run build` → 部署 Pages
+3. 约 1 分钟后线上站点就是本轮数据
 
-## 三、GitHub Actions 路径（已移除）
+## 三、GitHub Actions 路径（只构建部署）
 
-保留这段说明是为了以后想恢复时知道它原来是怎么跑的：
-
-- `on: schedule: cron "0 8,14,16 * * *"`（UTC）＝ 北京时间 16:00 / 22:00 / 次日 00:00
-- 只有 `schedule` 与 `workflow_dispatch` 事件才执行"采集并导出"（32 次资源），
-  然后构建、部署，最后把 JSON 提交回仓库
-- Token 用仓库 Secret `DELTA_API_TOKEN`，**不读本机的 .env**
-- ⚠️ 它不保证准时：实测晚 4 小时 55 分（本该 10-14 00:00 跑的那档，20:55 UTC 才启动）、
-  甚至 20 小时只交付 1 次且晚 6 小时 40 分。这正是移除它的原因。
+- workflow：`.github/workflows/pages.yml`，`on: push: branches: [main]` + 手动 `workflow_dispatch`
+- 步骤：checkout → setup-node → `npm ci && npm run build` → 上传 Pages 产物 → 部署
+- `permissions` 只要 `contents: read` / `pages: write` / `id-token: write`，
+  不再需要写权限（它已经不提交任何东西）
+- 刻意**不配 `schedule`**：GitHub 的 cron 实测迟到 4 小时 55 分 ~ 6 小时 40 分，
+  且每次触发都会真采一轮（32 次资源）——这两个问题都随 schedule 一起消失了
+- 数据来自仓库里提交的 `frontend/public/data/*.json`，也就是本机导出的那份
 
 ## 四、前端两种运行模式
 
@@ -114,7 +113,7 @@
 | 取价偶发失败 | 单轮失败，价格标 stale | 自动重试 3 次；下一次成功后自动清除标记 |
 | 目录与价格不匹配 | 大量价格被跳过 | 自动补一次目录再写 |
 | 推送失败（代理没开/断网） | 本地提交堆积，站点停止更新 | 恢复网络后下一次运行自动带上未推送的提交 |
-| 线上站点不更新 | 数据/前端停在最后一次部署 | 部署用的 Actions workflow 已移除；需要时从 git 历史恢复后重新部署 |
+| 线上站点不更新 | 数据/前端停在最后一次部署 | 依次看：①本机是否推送成功 ②Actions 那次部署是否成功 ③提交信息里别带 `[skip ci]` |
 | 前端误引实时客户端 | 静态站整块空白 | 构建期检查已拦截 |
 
 ## 六、每日资源消耗
@@ -126,4 +125,4 @@
 | `manufacturePro` | 3 次/天 × 12 组合 | 1 | 36 |
 | **合计** | | | **≈ 99 次/天** |
 
-（Actions 那条路径移除后，这里是唯一的消耗来源；此前两边同时跑会让额度翻倍。）
+（采集只在本机发生，Actions 只构建部署，所以这里是唯一的消耗来源。）

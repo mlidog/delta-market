@@ -179,8 +179,11 @@ def publish_site_data(
         logger.info("数据没有变化，跳过提交")
         return result
 
+    # 注意：这里**不能**带 `[skip ci]`。线上的 Pages 部署由 push 触发（workflow 只构建
+    # 部署、不采集），一旦提交信息里出现 skip 关键字，GitHub 会跳过整次推送，
+    # 站点就停在旧数据上了。
     commit = _git(
-        ["commit", "-m", message or "chore: 更新数据快照 [skip ci]"], repo_dir=repo_dir
+        ["commit", "-m", message or "chore: 更新数据快照"], repo_dir=repo_dir
     )
     if commit.returncode != 0:
         result.error = f"提交失败：{(commit.stderr or commit.stdout).strip()[:200]}"

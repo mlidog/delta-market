@@ -1,0 +1,55 @@
+name: 部署看板到 GitHub Pages
+
+# 只做「构建 + 部署」，不采集数据。
+#
+# 采集与导出由本机后端每天 0/16/22 点完成，结果提交进 frontend/public/data；
+# 本机一推送，这里就重建并发布，所以线上总是跟着本机走。
+#
+# 刻意不配 schedule：GitHub 自己的 cron 实测会迟到 5~6.7 小时，而且定时触发
+# 意味着要在 Actions 里再采一轮（32 次资源），和本机采集重复烧额度。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  # 本机连推多次时，只保留最新一次部署，避免排队堆积
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 构建静态前端
+        working-directory: frontend
+        env:
+          VITE_STATIC: "true"
+        run: |
+          npm ci
+          npm run build
+
+      - name: 上传 Pages 产物
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/dist
+
+      - name: 部署到 GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
