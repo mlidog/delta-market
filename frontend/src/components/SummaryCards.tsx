@@ -98,14 +98,19 @@ function MoverCard({ group, onPick }: { group: MoverGroup; onPick: (item: ItemPr
             <div className="mover-main">
               <div className="item-name">{top.name}</div>
               <div className="mover-spread">
-                <span className="mover-spread-value">{formatNumber(top.day_spread)}</span>
+                <span
+                  className="mover-spread-value"
+                  title="最近 24 小时最高价 − 当天补货价"
+                >
+                  {formatNumber(top.spread_24h)}
+                </span>
                 <em className={changeClass(top.bl_today)}>
                   平台今日 {formatPercent(top.bl_today)}
                 </em>
               </div>
               <div className="mover-lines">
                 <PriceLine label="补货" price={top.restock_price} at={top.restock_at} />
-                <PriceLine label="最高" price={top.day_high} at={top.day_high_at} />
+                <PriceLine label="最高" price={top.high_24h} at={top.high_24h_at} />
               </div>
             </div>
           </div>
@@ -138,11 +143,11 @@ function MoverCard({ group, onPick }: { group: MoverGroup; onPick: (item: ItemPr
                     <ItemIcon url={item.pic_url} size={24} />
                     <span className="mover-list-name">{item.name}</span>
                     <span className="mover-list-price">
-                      {formatNumber(item.restock_price)} → {formatNumber(item.day_high)}
-                      <i>{formatCollectTime(item.day_high_at)}</i>
+                      {formatNumber(item.restock_price)} → {formatNumber(item.high_24h)}
+                      <i>{formatCollectTime(item.high_24h_at)}</i>
                     </span>
                     <span className="mover-list-change">
-                      {formatNumber(item.day_spread)}
+                      {formatNumber(item.spread_24h)}
                     </span>
                   </li>
                 ))}

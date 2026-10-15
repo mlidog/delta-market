@@ -14,11 +14,11 @@ from app.database import get_db
 from app.models import CurrentPrice, Item, PriceHistory
 from app.schemas import ItemHistoryOut, ItemListOut, ItemPriceOut, PricePointOut
 from app.services.pricing import (
-    DayStats,
     PriceChange,
+    SpreadStats,
     change_pct,
-    load_day_stats,
     load_price_changes,
+    load_spread_stats,
 )
 from app.utils import utcnow
 
@@ -49,8 +49,8 @@ class SortField(StrEnum):
     change_7d_pct = "change_7d_pct"
     #: 今日价格变动的绝对值（数值差距，不是百分比）
     price_delta = "price_delta"
-    #: 当天最高价与补货价的价差（看"抢补货"机会）
-    day_spread = "day_spread"
+    #: 24 小时最高价与补货价的价差（看"抢补货"机会）
+    spread_24h = "spread_24h"
 
 
 class SortOrder(StrEnum):
@@ -128,9 +128,9 @@ def list_items(
         statement = statement.where(Item.is_tradable.is_(tradable))
 
     changes = load_price_changes(db)
-    day_stats = load_day_stats(db)
+    spread_stats = load_spread_stats(db)
     rows = [
-        _to_out(item, price, changes.get(item.item_id), day_stats.get(item.item_id))
+        _to_out(item, price, changes.get(item.item_id), spread_stats.get(item.item_id))
         for item, price in db.execute(statement)
     ]
     _sort_rows(rows, sort, order)
@@ -196,7 +196,7 @@ def _to_out(
     item: Item,
     price: CurrentPrice | None,
     change: PriceChange | None,
-    day: DayStats | None,
+    stats: SpreadStats | None,
 ) -> ItemPriceOut:
     latest_price = None
     if price is not None:
@@ -231,11 +231,11 @@ def _to_out(
             and price.price_start is not None
             else None
         ),
-        restock_price=day.restock_price if day else None,
-        restock_at=day.restock_at if day else None,
-        day_high=day.day_high if day else None,
-        day_high_at=day.day_high_at if day else None,
-        day_spread=day.spread if day else None,
+        restock_price=stats.restock_price if stats else None,
+        restock_at=stats.restock_at if stats else None,
+        high_24h=stats.high_24h if stats else None,
+        high_24h_at=stats.high_24h_at if stats else None,
+        spread_24h=stats.spread if stats else None,
         bl_today=price.bl_today if price else None,
         day_3_bl=price.day_3_bl if price else None,
         day_7_bl=price.day_7_bl if price else None,

@@ -11,8 +11,8 @@ from app.services.pricing import (
     PriceChange,
     beijing_day_start,
     change_pct,
-    load_day_stats,
     load_price_changes,
+    load_spread_stats,
 )
 
 ANCHOR = datetime(2026, 10, 12, 16, 0, 0)
@@ -136,7 +136,7 @@ class TestBeijingDayStart:
         )
 
 
-class TestLoadDayStats:
+class TestLoadSpreadStats:
     def test_restock_price_is_first_snapshot_of_the_day(self, session) -> None:
         add_item(session, "1")
         # 前一天的 23:00 快照（价格更高）不能当成补货价
@@ -146,12 +146,25 @@ class TestLoadDayStats:
         add_at(session, "1", 120, datetime(2026, 10, 14, 8, 0, 0))
         session.commit()
 
-        stats = load_day_stats(session, NOW)["1"]
+        stats = load_spread_stats(session, NOW)["1"]
         assert stats.restock_price == 80
         assert stats.restock_at == RESTOCK_AT
-        assert stats.day_high == 130
-        assert stats.day_high_at == datetime(2026, 10, 14, 5, 0, 0)
+        assert stats.high_24h == 130
+        assert stats.high_24h_at == datetime(2026, 10, 14, 5, 0, 0)
         assert stats.spread == 50
+
+    def test_high_can_come_from_yesterday_within_24h(self, session) -> None:
+        """窗口是"最近 24 小时"而不是"今天"：昨天晚上的高点也算数。"""
+        add_item(session, "1")
+        add_at(session, "1", 200, datetime(2026, 10, 13, 12, 0, 0))  # 昨天 20:00
+        add_at(session, "1", 80, RESTOCK_AT)
+        add_at(session, "1", 120, datetime(2026, 10, 14, 8, 0, 0))
+        session.commit()
+
+        stats = load_spread_stats(session, NOW)["1"]
+        assert stats.high_24h == 200
+        assert stats.high_24h_at == datetime(2026, 10, 13, 12, 0, 0)
+        assert stats.spread == 120
 
     def test_tie_on_high_price_keeps_the_earlier_time(self, session) -> None:
         add_item(session, "1")
@@ -160,16 +173,32 @@ class TestLoadDayStats:
         add_at(session, "1", 120, datetime(2026, 10, 14, 8, 0, 0))
         session.commit()
 
-        stats = load_day_stats(session, NOW)["1"]
-        assert stats.day_high == 120
-        assert stats.day_high_at == datetime(2026, 10, 14, 3, 0, 0)
+        stats = load_spread_stats(session, NOW)["1"]
+        assert stats.high_24h == 120
+        assert stats.high_24h_at == datetime(2026, 10, 14, 3, 0, 0)
 
-    def test_item_without_today_snapshot_has_no_stats(self, session) -> None:
+    def test_item_without_recent_snapshot_is_skipped(self, session) -> None:
+        add_item(session, "fresh")
+        add_at(session, "fresh", 80, RESTOCK_AT)
+        add_at(session, "fresh", 130, datetime(2026, 10, 14, 8, 0, 0))
         add_item(session, "old")
-        add_at(session, "old", 100, datetime(2026, 10, 12, 5, 0, 0))
+        add_at(session, "old", 100, datetime(2026, 10, 12, 5, 0, 0))  # 3 天前
         session.commit()
 
-        assert "old" not in load_day_stats(session, NOW)
+        stats = load_spread_stats(session, NOW)
+        # 锚点取全局最新快照（10-14 08:00），3 天前的物品落在 24 小时窗口之外
+        assert "old" not in stats
+        assert stats["fresh"].spread == 50
+
+    def test_item_without_today_restock_has_no_spread(self, session) -> None:
+        add_item(session, "1")
+        add_at(session, "1", 100, datetime(2026, 10, 13, 12, 0, 0))  # 只有昨天的数据
+        session.commit()
+
+        stats = load_spread_stats(session, NOW)["1"]
+        assert stats.high_24h == 100
+        assert stats.restock_price is None
+        assert stats.spread is None
 
     def test_spread_is_zero_when_price_never_rose(self, session) -> None:
         """只跌不涨的当天，价差是 0（最高价就是补货价本身），不是负数。"""
@@ -178,9 +207,9 @@ class TestLoadDayStats:
         add_at(session, "1", 70, datetime(2026, 10, 14, 8, 0, 0))
         session.commit()
 
-        stats = load_day_stats(session, NOW)["1"]
-        assert stats.day_high == 100
+        stats = load_spread_stats(session, NOW)["1"]
+        assert stats.high_24h == 100
         assert stats.spread == 0
 
     def test_empty_history_returns_empty_mapping(self, session) -> None:
-        assert load_day_stats(session, NOW) == {}
+        assert load_spread_stats(session, NOW) == {}

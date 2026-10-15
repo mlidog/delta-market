@@ -12,7 +12,7 @@
 与平台自带口径（`bl_today` / `day_3_bl` / `day_7_bl` / `day_30_bl`）的关系：
 平台口径由数据源直接返回并存在 `current_price` 里，两套并存、互不替代。
 
-另外提供 `load_day_stats()`：按**北京时间的"当天"**统计每个物品的补货价与最高价。
+另外提供 `load_spread_stats()`：统计每个物品**最近 24 小时的最高价**与**当日补货价**。
 """
 
 from __future__ import annotations
@@ -55,29 +55,30 @@ def change_pct(current: int | None, reference: int | None) -> float | None:
 
 
 @dataclass(frozen=True, slots=True)
-class DayStats:
-    """某个物品"当天"（北京时间自然日）的补货价与最高价。
+class SpreadStats:
+    """某个物品的「最近 24 小时最高价」与「当日补货价」。
 
-    补货价的口径：**当天 0 点后第一条快照的价格**。游戏每天 0 点补货，
-    我们正好在 0 点采集一次，那条快照就是补货后的市场价。
-    平台接口里没有"补货价"字段（`item_price_all` 只给 price / price_start /
-    day_N_price），所以只能用我们自己的采样值，好在它就是直接测量。
-
-    最高价同样来自当天的快照，因此精度受采样频率限制——每天 3 次采集时，
-    "当天最高价"实际是 3 个采样点里的最高值。
+    * **最高价**：窗口是 [最新快照时间 − 24 小时, 最新快照时间]。锚点用最新快照
+      而不是当前时间——采集停了几天时，卡片仍能显示最后一段可用数据，而不是突然全空。
+      窗口内只有我们自己的采样点，所以精度受采集频率限制（每天 3 次时，
+      "24 小时最高价"实际是 3~4 个采样点里的最高值）。
+    * **补货价**：当天（北京时间）0 点后第一条快照的价格。游戏每天 0 点补货，
+      我们正好在 0 点采集一次，那条快照就是补货后的市场价。平台接口里没有
+      "补货价"字段（`item_price_all` 只给 price / price_start / day_N_price），
+      所以只能用我们自己的采样值，好在它就是直接测量。
     """
 
     restock_price: int | None = None
     restock_at: datetime | None = None
-    day_high: int | None = None
-    day_high_at: datetime | None = None
+    high_24h: int | None = None
+    high_24h_at: datetime | None = None
 
     @property
     def spread(self) -> int | None:
-        """价差 = 当天最高价 − 补货价。结构上恒 ≥ 0（最高价里含补货那一条）。"""
-        if self.day_high is None or self.restock_price is None:
+        """价差 = 24 小时最高价 − 补货价。"""
+        if self.high_24h is None or self.restock_price is None:
             return None
-        return self.day_high - self.restock_price
+        return self.high_24h - self.restock_price
 
 
 def beijing_day_start(now: datetime | None = None) -> datetime:
@@ -86,62 +87,60 @@ def beijing_day_start(now: datetime | None = None) -> datetime:
     return datetime.combine(beijing_now.date(), time.min) - BEIJING_OFFSET
 
 
-def load_day_stats(session: Session, now: datetime | None = None) -> dict[str, DayStats]:
-    """一次算出全部物品当天的补货价、最高价与价差。
+def load_spread_stats(session: Session, now: datetime | None = None) -> dict[str, SpreadStats]:
+    """一次算出全部物品的 24 小时最高价、当日补货价与价差。
 
-    用窗口函数一趟扫完：`rn_first` 取当天最早的一条（补货价），
-    `rn_high` 取当天价格最高的一条（并列时取更早的那条，时间更有参考意义）。
+    两次窗口函数查询：一次按价格取 24 小时窗口内的最高（并列取更早的时间），
+    一次按时间取当天最早的一条作为补货价。分成两次而不是一次带条件的窗口函数，
+    是因为"窗口不同"这件事写在 WHERE 里比藏在 CASE 排序里更好读。
     """
-    day_start = beijing_day_start(now)
+    anchor = session.scalar(select(func.max(PriceHistory.recorded_at))) or (now or utcnow())
+    highs = _first_per_item(
+        session,
+        PriceHistory.recorded_at >= anchor - WINDOW_24H,
+        order_by=(PriceHistory.price.desc(), PriceHistory.recorded_at),
+    )
+    restocks = _first_per_item(
+        session,
+        PriceHistory.recorded_at >= beijing_day_start(now),
+        order_by=(PriceHistory.recorded_at,),
+    )
+
+    return {
+        item_id: SpreadStats(
+            restock_price=restocks[item_id][1] if item_id in restocks else None,
+            restock_at=restocks[item_id][0] if item_id in restocks else None,
+            high_24h=high,
+            high_24h_at=high_at,
+        )
+        for item_id, (high_at, high) in highs.items()
+    }
+
+
+def _first_per_item(
+    session: Session,
+    condition,
+    order_by: tuple,
+) -> dict[str, tuple[datetime, int]]:
+    """按 `order_by` 取每个物品的第一条快照，返回 `{item_id: (时间, 价格)}`。"""
     ranked = (
         select(
             PriceHistory.item_id.label("item_id"),
             PriceHistory.price.label("price"),
             PriceHistory.recorded_at.label("recorded_at"),
             func.row_number()
-            .over(
-                partition_by=PriceHistory.item_id,
-                order_by=PriceHistory.recorded_at,
-            )
-            .label("rn_first"),
-            func.row_number()
-            .over(
-                partition_by=PriceHistory.item_id,
-                order_by=(PriceHistory.price.desc(), PriceHistory.recorded_at),
-            )
-            .label("rn_high"),
+            .over(partition_by=PriceHistory.item_id, order_by=order_by)
+            .label("rank"),
         )
-        .where(PriceHistory.recorded_at >= day_start)
+        .where(condition)
         .subquery()
     )
-
-    stats: dict[str, DayStats] = {}
-    for item_id, price, recorded_at, rn_first, rn_high in session.execute(
-        select(
-            ranked.c.item_id,
-            ranked.c.price,
-            ranked.c.recorded_at,
-            ranked.c.rn_first,
-            ranked.c.rn_high,
-        ).where((ranked.c.rn_first == 1) | (ranked.c.rn_high == 1))
-    ):
-        current = stats.get(item_id, DayStats())
-        if rn_first == 1:
-            current = DayStats(
-                restock_price=price,
-                restock_at=recorded_at,
-                day_high=current.day_high,
-                day_high_at=current.day_high_at,
-            )
-        if rn_high == 1:
-            current = DayStats(
-                restock_price=current.restock_price,
-                restock_at=current.restock_at,
-                day_high=price,
-                day_high_at=recorded_at,
-            )
-        stats[item_id] = current
-    return stats
+    rows = session.execute(
+        select(ranked.c.item_id, ranked.c.price, ranked.c.recorded_at).where(
+            ranked.c.rank == 1
+        )
+    )
+    return {item_id: (recorded_at, price) for item_id, price, recorded_at in rows}
 
 
 def load_price_changes(session: Session) -> dict[str, PriceChange]:

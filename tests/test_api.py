@@ -533,10 +533,10 @@ class TestDashboardSummary:
         assert body["rising_count"] == 1
 
 
-class TestDaySpread:
-    """「当天最高价 − 补货价」：接口字段与排序。"""
+class TestSpread24h:
+    """「24 小时最高价 − 补货价」：接口字段与排序。"""
 
-    def test_exposes_restock_price_and_day_high(self, client, session) -> None:
+    def test_exposes_restock_price_and_24h_high(self, client, session) -> None:
         from app.schemas.common import to_utc_iso
         from app.services.pricing import beijing_day_start
 
@@ -565,13 +565,13 @@ class TestDaySpread:
         )
         session.commit()
 
-        body = get_items(client, sort="day_spread", order="desc")
+        body = get_items(client, sort="spread_24h", order="desc")
         row = body["items"][0]
         assert row["restock_price"] == 80
         assert row["restock_at"] == to_utc_iso(day_start)
-        assert row["day_high"] == 130
-        assert row["day_high_at"] == to_utc_iso(high_at)
-        assert row["day_spread"] == 50
+        assert row["high_24h"] == 130
+        assert row["high_24h_at"] == to_utc_iso(high_at)
+        assert row["spread_24h"] == 50
         # 补货时刻必须落在北京时间 0 点（UTC 前一天 16:00）
         assert (day_start + timedelta(hours=8)).hour == 0
 
@@ -623,6 +623,6 @@ class TestDaySpread:
         )
         session.commit()
 
-        rows = get_items(client, sort="day_spread", order="desc")["items"]
+        rows = get_items(client, sort="spread_24h", order="desc")["items"]
         assert [row["item_id"] for row in rows] == ["910001", "910002"]
-        assert rows[1]["day_spread"] is None
+        assert rows[1]["spread_24h"] is None

@@ -120,9 +120,9 @@ export default function App() {
   }, []);
 
   /**
-   * 顶部三张卡片：防护道具 / 枪械 / 子弹 里"当天最高价与补货价的价差"最大的若干个。
+   * 顶部三张卡片：防护道具 / 枪械 / 子弹 里"24 小时最高价与补货价的价差"最大的若干个。
    *
-   * 价差 = 当天最高价 − 补货价（补货价 = 0 点补货后第一条快照的价格）。
+   * 价差 = 最近 24 小时最高价 − 补货价（补货价 = 当天 0 点补货后第一条快照的价格）。
    * 这个口径直接对应"0 点补货时抢到、当天高点卖出能赚多少"，
    * 比百分比或开盘价差更贴近实际收益。
    */
@@ -134,14 +134,14 @@ export default function App() {
             category: category.key,
             // 多取一些：下面要挡掉耐久细分项，过滤后仍需凑满 MOVER_LIMIT 条
             limit: MOVER_FETCH_LIMIT,
-            sort: "day_spread",
+            sort: "spread_24h",
             order: "desc",
           });
           return {
             key: category.key,
             label: category.label,
             items: response.items
-              .filter((item) => item.day_spread !== null && !isExcludedMoverName(item.name))
+              .filter((item) => item.spread_24h !== null && !isExcludedMoverName(item.name))
               .slice(0, MOVER_LIMIT),
           };
         }),

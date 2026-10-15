@@ -23,10 +23,11 @@ export interface ItemPrice {
   /** 补货价 = 当天 0 点补货后第一条快照的价格 */
   restock_price: number | null;
   restock_at: string | null;
-  day_high: number | null;
-  day_high_at: string | null;
-  /** 价差 = 当天最高价 − 补货价 */
-  day_spread: number | null;
+  /** 最近 24 小时的最高价 */
+  high_24h: number | null;
+  high_24h_at: string | null;
+  /** 价差 = 24 小时最高价 − 补货价 */
+  spread_24h: number | null;
   bl_today: number | null;
   day_3_bl: number | null;
   day_7_bl: number | null;
