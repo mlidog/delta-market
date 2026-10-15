@@ -125,11 +125,15 @@ def run_pipeline() -> None:
 
 
 def build_cron_trigger(settings: Settings | None = None) -> CronTrigger:
-    """构造每日固定时刻触发的 Cron 触发器。"""
+    """构造每日固定时刻触发的 Cron 触发器。
+
+    分钟取 `COLLECTOR_CRON_MINUTE`（默认 15）：0 点的补货价在接口上要过几分钟才出现，
+    整点采到的是补货前的高价（详见 `app/config.py` 里该字段的说明）。
+    """
     config = settings or get_settings()
     return CronTrigger(
         hour=",".join(str(hour) for hour in config.collector_cron_hours),
-        minute=0,
+        minute=config.collector_cron_minute,
         timezone=ZoneInfo(config.collector_timezone),
     )
 

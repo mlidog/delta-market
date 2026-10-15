@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     collector_cron_hours: Annotated[list[int], NoDecode] = Field(
         default_factory=lambda: list(DEFAULT_CRON_HOURS)
     )
+    #: 采集时刻的分钟偏移（0~59），对所有档位生效。
+    #: 实测（2026-10-15，`scripts/probe_restock_lag.py`，10 个品种的分钟级曲线）：
+    #: 0 点补货后价格不是立刻反映到接口上——0:02 拿到的往往还是补货前的高价，
+    #: 补货形成的低点出现在 00:07~00:30（中位数约 00:07），快的品种 5~15 分钟内就回弹。
+    #: 所以 0 点这一档往后挪 15 分钟，才采得到那个低点。
+    collector_cron_minute: int = Field(default=15, ge=0, le=59)
     collector_retry_times: int = 3
     collector_run_on_startup: bool = True
     #: 物品基础信息的刷新间隔（天）。`item_info_all` 与 `item_price_all` 各消耗

@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from app.config import Settings
 from app.models import CollectRunStatus
@@ -25,7 +26,8 @@ from app.services import CollectResult
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 
 
-def at(hour: int, minute: int = 0, day: int = 12) -> datetime:
+def at(hour: int, minute: int = 15, day: int = 12) -> datetime:
+    """默认分钟取 15——调度器的分钟偏移就是 15（0 点补货价在接口上有延迟）。"""
     return datetime(2026, 10, day, hour, minute, tzinfo=SHANGHAI)
 
 
@@ -58,9 +60,25 @@ class TestCronTrigger:
         trigger = build_cron_trigger(Settings(_env_file=None))
         assert trigger.get_next_fire_time(None, at(0, 30)) == at(12)
 
+    def test_minute_offset_is_applied(self) -> None:
+        """0 点的补货价要过几分钟才出现在接口上，所以整点后偏移 15 分钟采集。"""
+        trigger = build_cron_trigger(Settings(_env_file=None))
+        assert trigger.get_next_fire_time(None, at(23, 59)) == at(0, minute=15, day=13)
+        merged = trigger.get_next_fire_time(None, at(11, 30))
+        assert (merged.hour, merged.minute) == (12, 15)
+
+    def test_minute_offset_is_configurable(self) -> None:
+        trigger = build_cron_trigger(Settings(_env_file=None, collector_cron_minute=0))
+        assert trigger.get_next_fire_time(None, at(11, 30)) == at(12, minute=0)
+
+    def test_invalid_minute_is_rejected(self) -> None:
+        with pytest.raises(ValidationError):
+            Settings(_env_file=None, collector_cron_minute=60)
+
     def test_sequence_covers_the_three_slots(self) -> None:
         trigger = build_cron_trigger(Settings(_env_file=None))
-        cursor = at(0, 1)
+        # 从当天 00:15 那一档之后开始，依次应命中 12:15 / 22:15 / 次日 00:15
+        cursor = at(0, 16)
         fires = []
         for _ in range(3):
             cursor = trigger.get_next_fire_time(None, cursor)
@@ -130,7 +148,7 @@ class TestNextCollectAt:
             assert upcoming is not None
             local = upcoming.astimezone(SHANGHAI)
             assert local.hour in (0, 12, 22)
-            assert (local.minute, local.second) == (0, 0)
+            assert (local.minute, local.second) == (15, 0)
         finally:
             scheduler.shutdown(wait=False)
 

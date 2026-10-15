@@ -88,7 +88,7 @@ docs/                  plan.md、api_spec.md
 
 ## 七、采集与容错策略
 
-**调度**：APScheduler `BackgroundScheduler` + `CronTrigger`，时区 `Asia/Shanghai`，每日 `0/12/22` 点各一次（3 次/天）；`COLLECTOR_RUN_ON_STARTUP=true` 时应用启动后补采一次。调度器只在单进程内运行（多 worker 会重复触发，MVP 用单 worker，README 中注明）。
+**调度**：APScheduler `BackgroundScheduler` + `CronTrigger`，时区 `Asia/Shanghai`，每日 `0/12/22` 点各一次（3 次/天，分钟偏移 15 分钟——补货价在接口上有延迟）；`COLLECTOR_RUN_ON_STARTUP=true` 时应用启动后补采一次。调度器只在单进程内运行（多 worker 会重复触发，MVP 用单 worker，README 中注明）。
 
 0 点这一次是有意保留的：游戏每日价格重置，0 点采样拿到的是「今日开盘价」，对涨跌分析价值最高。
 
