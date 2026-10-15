@@ -46,17 +46,17 @@ class StubCollector:
 
 
 class TestCronTrigger:
-    def test_next_fire_after_midday_is_16(self) -> None:
+    def test_next_fire_in_the_afternoon_is_22(self) -> None:
         trigger = build_cron_trigger(Settings(_env_file=None))
-        assert trigger.get_next_fire_time(None, at(15)) == at(16)
+        assert trigger.get_next_fire_time(None, at(15)) == at(22)
 
     def test_next_fire_after_22_is_next_day_midnight(self) -> None:
         trigger = build_cron_trigger(Settings(_env_file=None))
         assert trigger.get_next_fire_time(None, at(23)) == at(0, day=13)
 
-    def test_next_fire_after_midnight_is_16(self) -> None:
+    def test_next_fire_after_midnight_is_12(self) -> None:
         trigger = build_cron_trigger(Settings(_env_file=None))
-        assert trigger.get_next_fire_time(None, at(0, 30)) == at(16)
+        assert trigger.get_next_fire_time(None, at(0, 30)) == at(12)
 
     def test_sequence_covers_the_three_slots(self) -> None:
         trigger = build_cron_trigger(Settings(_env_file=None))
@@ -67,7 +67,7 @@ class TestCronTrigger:
             fires.append(cursor)
             # 触发时刻本身会被算作"下一个"，游标必须往前走一秒
             cursor += timedelta(seconds=1)
-        assert fires == [at(16), at(22), at(0, day=13)]
+        assert fires == [at(12), at(22), at(0, day=13)]
 
     def test_custom_hours_are_respected(self) -> None:
         trigger = build_cron_trigger(
@@ -79,8 +79,8 @@ class TestCronTrigger:
     def test_trigger_uses_shanghai_timezone(self) -> None:
         trigger = build_cron_trigger(Settings(_env_file=None))
         assert str(trigger.timezone) == "Asia/Shanghai"
-        # 北京时间 16:00 == UTC 08:00，验证时区没有退化成 UTC
-        assert at(16).astimezone(ZoneInfo("UTC")).hour == 8
+        # 北京时间 12:00 == UTC 04:00，验证时区没有退化成 UTC
+        assert at(12).astimezone(ZoneInfo("UTC")).hour == 4
 
 
 class TestCreateScheduler:
@@ -129,7 +129,7 @@ class TestNextCollectAt:
             upcoming = next_collect_at(scheduler)
             assert upcoming is not None
             local = upcoming.astimezone(SHANGHAI)
-            assert local.hour in (0, 16, 22)
+            assert local.hour in (0, 12, 22)
             assert (local.minute, local.second) == (0, 0)
         finally:
             scheduler.shutdown(wait=False)

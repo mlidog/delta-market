@@ -15,8 +15,8 @@ from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-#: 默认采集时刻：0 点（游戏每日价格重置，可捕获开盘价）、16 点、22 点
-DEFAULT_CRON_HOURS = [0, 16, 22]
+#: 默认采集时刻：0 点（游戏每日价格重置，可捕获开盘价）、12 点、22 点
+DEFAULT_CRON_HOURS = [0, 12, 22]
 
 
 class Settings(BaseSettings):
@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     #: 是否在本进程内启动定时采集。多 worker 部署时应只让一个进程开启，
     #: 或干脆关闭、由外部调度器调用采集命令。
     scheduler_enabled: bool = True
-    # 用 NoDecode 关闭 pydantic-settings 的 JSON 解析，才能接受 `0,16,22` 这种写法
+    # 用 NoDecode 关闭 pydantic-settings 的 JSON 解析，才能接受 `0,12,22` 这种写法
     collector_cron_hours: Annotated[list[int], NoDecode] = Field(
         default_factory=lambda: list(DEFAULT_CRON_HOURS)
     )
@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     @field_validator("collector_cron_hours", mode="before")
     @classmethod
     def _parse_cron_hours(cls, value: object) -> object:
-        """支持 `.env` 中的 `0,16,22`（含中文逗号与空格）。"""
+        """支持 `.env` 中的 `0,12,22`（含中文逗号与空格）。"""
         if isinstance(value, str):
             parts = value.replace("，", ",").split(",")
             return [int(part.strip()) for part in parts if part.strip()]

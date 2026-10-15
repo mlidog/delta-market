@@ -4,7 +4,7 @@
 
 | 环节 | 谁来做 | 触发方式 | 说明 |
 | --- | --- | --- | --- |
-| **采集 + 导出** | 本机后端 | 每天 0/16/22 点调度 | 唯一的采集来源，额度只在这里花 |
+| **采集 + 导出** | 本机后端 | 每天 0/12/22 点调度 | 唯一的采集来源，额度只在这里花 |
 | **构建 + 部署** | GitHub Actions | 本机 push 后自动触发 | `.github/workflows/pages.yml`，只构建部署、不采集 |
 
 一条链路：本机采集 → 导出 JSON → 提交推送 → Actions 重建并发布 Pages。
@@ -17,7 +17,7 @@
 
 ### 第 0 步：定时触发（`app/scheduler.py`）
 
-- APScheduler `BackgroundScheduler`，cron 表达式 `hour=0,16,22 minute=0`，时区 `Asia/Shanghai`
+- APScheduler `BackgroundScheduler`，cron 表达式 `hour=0,12,22 minute=0`，时区 `Asia/Shanghai`
 - 只注册**一个** job（id `collect-prices`），触发 `run_pipeline()`
   - 三步串在同一个 job 里是为了保证顺序：导出必须在采集与同步之后
 - 启动补采**已关闭**（`COLLECTOR_RUN_ON_STARTUP=false`）：重启只加载代码，不采集

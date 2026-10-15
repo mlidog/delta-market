@@ -164,7 +164,7 @@ class TestSettings:
             Settings(_env_file=None, collector_cron_hours="24")
 
     def test_default_schedule_is_three_times_a_day(self) -> None:
-        assert Settings(_env_file=None).collector_cron_hours == [0, 16, 22]
+        assert Settings(_env_file=None).collector_cron_hours == [0, 12, 22]
 
     def test_default_data_source_is_mock(self) -> None:
         assert Settings(_env_file=None).data_source == "mock"

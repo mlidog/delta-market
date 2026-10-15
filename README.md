@@ -11,7 +11,7 @@
 | M2 | 数据源抽象层 + MockDataSource | 完成 |
 | M3 | 采集服务（写入价格快照） | 完成 |
 | M4 | 四个 API 接口 | 完成 |
-| M5 | 定时任务（每日 0/16/22 点） | 完成 |
+| M5 | 定时任务（每日 0/12/22 点） | 完成 |
 | M6 | DeltaDataSource（真实数据帝 API） | 完成 |
 | M7 | 前端看板 | 完成 |
 | M8 | 特勤处制造收益排行 | 完成 |
@@ -43,9 +43,9 @@ pytest
 
 ## 定时采集
 
-应用启动后会拉起调度器，按 `COLLECTOR_CRON_HOURS`（默认北京时间 0 / 16 / 22 点）自动采集。
+应用启动后会拉起调度器，按 `COLLECTOR_CRON_HOURS`（默认北京时间 0 / 12 / 22 点）自动采集。
 
-- `COLLECTOR_RUN_ON_STARTUP=false`（本项目当前设置）：启动**不再**补采，采集只由 0/16/22 三个档位驱动。
+- `COLLECTOR_RUN_ON_STARTUP=false`（本项目当前设置）：启动**不再**补采，采集只由 0/12/22 三个档位驱动。
   这样改代码重启只加载代码，不会白花一轮平台额度。设 `true` 可恢复"启动即补采"
 - `SCHEDULER_ENABLED=false` 可整体关闭本进程的定时采集
 - `/health` 的 `next_collect_at` 字段能看到下一次采集时间
